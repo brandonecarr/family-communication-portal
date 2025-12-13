@@ -139,7 +139,7 @@ export default function VisitFeedbackForm() {
                     <h4 className="font-semibold">{visit.discipline}</h4>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                       <User className="h-3 w-3" />
-                      {visit.staff?.name}
+                      {visit.staff?.[0]?.name}
                     </p>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                       <Calendar className="h-3 w-3" />
