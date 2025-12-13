@@ -229,38 +229,3 @@ export default function SupplyRequestForm() {
     </Card>
   );
 }
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <div className="space-y-2">
-          <Label>Additional Notes (Optional)</Label>
-          <Textarea
-            placeholder="Any specific instructions or additional items needed..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="min-h-[100px]"
-          />
-        </div>
-
-        <div className="flex items-center justify-between pt-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            {Object.keys(selectedItems).length} items selected
-          </div>
-          <Button
-            size="lg"
-            onClick={handleSubmit}
-            disabled={Object.keys(selectedItems).length === 0}
-          >
-            Submit Request
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
