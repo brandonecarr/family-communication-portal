@@ -32,7 +32,8 @@ import "react-datepicker/dist/react-datepicker.css";
 
 interface Patient {
   id: string;
-  name: string;
+  first_name: string;
+  last_name: string;
   status: string;
   date_of_birth?: string;
   phone?: string;
