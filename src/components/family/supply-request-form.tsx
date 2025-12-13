@@ -229,11 +229,6 @@ export default function SupplyRequestForm() {
     </Card>
   );
 }
-                      </span>
-                    </Label>
-                  </div>
-
-                  {selectedItems[item.id] && (
                     <div className="flex items-center gap-2">
                       <Button
                         size="icon"

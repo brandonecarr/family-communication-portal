@@ -232,16 +232,6 @@ export default function VisitFeedbackForm() {
     </div>
   );
 }
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
         </CardContent>
       </Card>
 
