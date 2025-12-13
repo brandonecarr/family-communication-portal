@@ -202,8 +202,6 @@ export async function inviteFamilyMember(formData: FormData) {
   }
   
   revalidatePath(`/admin/patients/${patient_id}`);
-  
-  return { success: true, data };
 }
 
 export async function updateFamilyMember(formData: FormData) {
