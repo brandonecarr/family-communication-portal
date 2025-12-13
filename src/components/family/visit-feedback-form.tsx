@@ -16,7 +16,7 @@ interface Visit {
   discipline: string;
   staff: {
     name: string;
-  };
+  }[];
 }
 
 export default function VisitFeedbackForm() {
