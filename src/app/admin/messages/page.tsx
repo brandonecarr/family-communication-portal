@@ -57,7 +57,8 @@ export default async function AdminMessagesPage({
   // Filter out family members without valid patient data and filter by agency
   const validFamilyMembers = familyMembers?.filter(fm => {
     if (!fm.patient) return false;
-    if (agencyId && fm.patient.agency_id !== agencyId) return false;
+    const patient = Array.isArray(fm.patient) ? fm.patient[0] : fm.patient;
+    if (agencyId && patient?.agency_id !== agencyId) return false;
     return true;
   }) || [];
 
