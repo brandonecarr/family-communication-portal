@@ -232,22 +232,6 @@ export default function VisitFeedbackForm() {
     </div>
   );
 }
-        </CardContent>
-      </Card>
-
-      {selectedVisit && (
-        <Card className="soft-shadow-lg border-0">
-          <CardHeader>
-            <CardTitle>Rate Your Experience</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <Label>How would you rate this visit?</Label>
-              <div className="flex items-center gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    onClick={() => setRating(star)}
                     onMouseEnter={() => setHoveredRating(star)}
                     onMouseLeave={() => setHoveredRating(0)}
                     className="transition-transform hover:scale-110"

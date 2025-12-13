@@ -229,25 +229,6 @@ export default function SupplyRequestForm() {
     </Card>
   );
 }
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-8 w-8"
-                        onClick={() => handleQuantityChange(item.id, -1)}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-8 text-center font-medium">
-                        {selectedItems[item.id]}
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-8 w-8"
-                        onClick={() => handleQuantityChange(item.id, 1)}
-                      >
-                        <Plus className="h-4 w-4" />
                       </Button>
                     </div>
                   )}
