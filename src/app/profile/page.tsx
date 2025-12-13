@@ -14,7 +14,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [phone, setPhone] = useState("");
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const router = useRouter();
 
   // Format phone number as (xxx) xxx-xxxx
