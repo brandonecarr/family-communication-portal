@@ -55,12 +55,16 @@ export default async function AdminMessagesPage({
   }
 
   // Filter out family members without valid patient data and filter by agency
+  // Also normalize the patient field from array to single object
   const validFamilyMembers = familyMembers?.filter(fm => {
     if (!fm.patient) return false;
     const patient = Array.isArray(fm.patient) ? fm.patient[0] : fm.patient;
     if (agencyId && patient?.agency_id !== agencyId) return false;
     return true;
-  }) || [];
+  }).map(fm => ({
+    ...fm,
+    patient: Array.isArray(fm.patient) ? fm.patient[0] : fm.patient
+  })) || [];
 
   // Fetch all messages to get unread counts and last message per family member
   let messagesQuery = supabase
