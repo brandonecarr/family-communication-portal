@@ -452,3 +452,72 @@ export async function resendFacilityInvite(facilityId: string) {
   revalidatePath(`/super-admin/facilities/${facilityId}`);
   return { error: null, success: true };
 }
+
+export async function inviteStaffMembers(staffMembers: Array<{ name: string; email: string; role: string }>, facilityId: string) {
+  const { createServiceClient } = await import("../../../supabase/server");
+  const supabase = createServiceClient();
+  
+  const results = [];
+  
+  for (const staff of staffMembers) {
+    try {
+      // Create user with Admin API
+      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
+        staff.email,
+        {
+          data: {
+            full_name: staff.name,
+            role: staff.role,
+            agency_id: facilityId,
+            needs_password_setup: true,
+          },
+          redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('/auth/v1', '')}/facility-setup?facility=${facilityId}`,
+        }
+      );
+
+      if (authError) {
+        console.error(`Error inviting ${staff.email}:`, authError);
+        results.push({ email: staff.email, success: false, error: authError.message });
+        continue;
+      }
+
+      // Create user record in users table
+      if (authData.user) {
+        const { error: userError } = await supabase
+          .from("users")
+          .insert({
+            id: authData.user.id,
+            email: staff.email,
+            full_name: staff.name,
+            role: staff.role,
+            agency_id: facilityId,
+            onboarding_completed: false,
+          });
+
+        if (userError) {
+          console.error(`Error creating user record for ${staff.email}:`, userError);
+        }
+
+        // Create agency_users relationship
+        const { error: agencyUserError } = await supabase
+          .from("agency_users")
+          .insert({
+            user_id: authData.user.id,
+            agency_id: facilityId,
+            role: staff.role,
+          });
+
+        if (agencyUserError) {
+          console.error(`Error creating agency_users record for ${staff.email}:`, agencyUserError);
+        }
+      }
+
+      results.push({ email: staff.email, success: true });
+    } catch (err: any) {
+      console.error(`Error inviting ${staff.email}:`, err);
+      results.push({ email: staff.email, success: false, error: err.message });
+    }
+  }
+
+  return { results };
+}

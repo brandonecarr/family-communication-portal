@@ -201,23 +201,17 @@ export default function AdminSetupPage() {
     setError("");
 
     try {
-      for (const staff of staffMembers) {
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: staff.email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/facility-setup?facility=${facilityId}`,
-            data: {
-              full_name: staff.name,
-              role: staff.role,
-              agency_id: facilityId,
-              needs_password_setup: true,
-            },
-          },
-        });
-
-        if (otpError) {
-          console.error(`Error inviting ${staff.email}:`, otpError);
-        }
+      // Import the server action
+      const { inviteStaffMembers } = await import("@/lib/actions/facilities");
+      
+      // Call the server action to invite staff members
+      const { results } = await inviteStaffMembers(staffMembers, facilityId!);
+      
+      // Check if any invitations failed
+      const failures = results.filter((r: any) => !r.success);
+      if (failures.length > 0) {
+        console.error("Some invitations failed:", failures);
+        setError(`Failed to invite ${failures.length} staff member(s). Check console for details.`);
       }
 
       setStep(4);
