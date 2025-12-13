@@ -134,7 +134,18 @@ export async function deletePatient(patientId: string) {
   revalidatePath("/admin/patients");
 }
 
+// Wrapper function that returns result object (for dialog component)
 export async function inviteFamilyMember(formData: FormData) {
+  try {
+    await inviteFamilyMemberAction(formData);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to invite family member" };
+  }
+}
+
+// Form action that throws errors (for form action usage)
+export async function inviteFamilyMemberAction(formData: FormData) {
   const supabase = createServiceClient();
   
   const patient_id = formData.get("patient_id") as string;
@@ -153,7 +164,7 @@ export async function inviteFamilyMember(formData: FormData) {
     .maybeSingle();
   
   if (emailExists) {
-    return { success: false, error: "A family member with this email already exists for this patient" };
+    throw new Error("A family member with this email already exists for this patient");
   }
   
   // Check for duplicate name
@@ -165,7 +176,7 @@ export async function inviteFamilyMember(formData: FormData) {
     .maybeSingle();
   
   if (nameExists) {
-    return { success: false, error: "A family member with this name already exists for this patient" };
+    throw new Error("A family member with this name already exists for this patient");
   }
   
   // Check for duplicate phone (if provided)
@@ -178,7 +189,7 @@ export async function inviteFamilyMember(formData: FormData) {
       .maybeSingle();
     
     if (phoneExists) {
-      return { success: false, error: "A family member with this phone number already exists for this patient" };
+      throw new Error("A family member with this phone number already exists for this patient");
     }
   }
   
@@ -198,10 +209,11 @@ export async function inviteFamilyMember(formData: FormData) {
   
   if (error) {
     console.error("Error inviting family member:", error);
-    return { success: false, error: error.message || "Failed to invite family member" };
+    throw new Error(error.message || "Failed to invite family member");
   }
   
   revalidatePath(`/admin/patients/${patient_id}`);
+  revalidatePath("/admin/family-access");
 }
 
 export async function updateFamilyMember(formData: FormData) {

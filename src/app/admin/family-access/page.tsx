@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Link from "next/link";
-import { inviteFamilyMember } from "@/lib/actions/patients";
+import { inviteFamilyMemberAction } from "@/lib/actions/patients";
 
 export default async function AdminFamilyAccessPage({
   searchParams,
@@ -126,7 +126,7 @@ export default async function AdminFamilyAccessPage({
             </Link>
           </CardHeader>
           <CardContent>
-            <form action={inviteFamilyMember} className="space-y-6">
+            <form action={inviteFamilyMemberAction} className="space-y-6">
               <input type="hidden" name="redirectTo" value={selectedPatientId ? `/admin/patients/${selectedPatientId}` : "/admin/family-access"} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
