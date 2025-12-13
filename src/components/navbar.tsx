@@ -5,9 +5,16 @@ import { User, UserCircle } from 'lucide-react'
 import UserProfile from './user-profile'
 
 export default async function Navbar() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
+  let user = null;
+  
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase.auth.getUser()
+    user = data?.user
+  } catch (error) {
+    // Failed to get user - likely a cookies access issue
+    console.error('Navbar: Failed to get user session', error)
+  }
 
 
   return (
