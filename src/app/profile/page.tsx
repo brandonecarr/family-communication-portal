@@ -10,12 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserCircle, Mail, Globe, Shield } from "lucide-react";
 
+export const dynamic = 'force-dynamic';
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [phone, setPhone] = useState("");
-  const [supabase] = useState(() => createClient());
+  const [supabase, setSupabase] = useState<any>(null);
   const router = useRouter();
+
+  // Initialize Supabase client only on the client side
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
 
   // Format phone number as (xxx) xxx-xxxx
   const formatPhoneNumber = (value: string) => {
@@ -35,6 +42,8 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    if (!supabase) return;
+    
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -56,7 +65,7 @@ export default function ProfilePage() {
     };
 
     fetchProfile();
-  }, []);
+  }, [supabase, router]);
 
   if (!user) {
     return null;
