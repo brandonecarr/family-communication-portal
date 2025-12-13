@@ -9,11 +9,12 @@ import Navbar from "@/components/navbar";
 import { UrlProvider } from "@/components/url-provider";
 
 export default async function ForgotPassword(props: {
-  searchParams: Promise<Message>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const searchParams = await props.searchParams;
+  const params = await props.searchParams;
+  const searchParams = params as Message;
 
-  if ("message" in searchParams) {
+  if ("message" in params || "error" in params || "success" in params) {
     return (
       <div className="flex h-screen w-full flex-1 items-center justify-center p-4 sm:max-w-md">
         <FormMessage message={searchParams} />
@@ -65,7 +66,9 @@ export default async function ForgotPassword(props: {
                 Reset Password
               </SubmitButton>
 
-              <FormMessage message={searchParams} />
+              {("message" in params || "error" in params || "success" in params) && (
+                <FormMessage message={searchParams} />
+              )}
             </form>
           </UrlProvider>
         </div>

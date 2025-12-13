@@ -7,13 +7,14 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 
 interface LoginProps {
-  searchParams: Promise<Message>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function SignInPage({ searchParams }: LoginProps) {
-  const message = await searchParams;
+  const params = await searchParams;
+  const message = params as Message;
 
-  if ("message" in message) {
+  if ("message" in params || "error" in params || "success" in params) {
     return (
       <div className="flex h-screen w-full flex-1 items-center justify-center p-4 sm:max-w-md">
         <FormMessage message={message} />
@@ -86,7 +87,9 @@ export default async function SignInPage({ searchParams }: LoginProps) {
               Sign in
             </SubmitButton>
 
-            <FormMessage message={message} />
+            {("message" in params || "error" in params || "success" in params) && (
+              <FormMessage message={message} />
+            )}
           </form>
         </div>
       </div>
