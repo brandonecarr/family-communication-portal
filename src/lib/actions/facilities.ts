@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient, createServiceClient } from "../../../supabase/server";
+import { createClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import { getSiteUrl } from "@/lib/utils";
 
@@ -102,109 +102,48 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Generate magic link using Admin API and send via Brevo
+    // Send invite email via Brevo with direct link to facility-setup
     const origin = getSiteUrl();
-    const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
+    const setupUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
     
-    console.log("Attempting to send facility invite email to:", adminEmail);
-    console.log("Redirect URL:", redirectUrl);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     
-    const serviceClient = createServiceClient();
-    console.log("Service client available:", !!serviceClient);
-    
-    if (serviceClient) {
-      // Use generateLink to create a magic link
-      const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-        type: "magiclink",
-        email: adminEmail,
-        options: {
-          redirectTo: redirectUrl,
-          data: {
-            full_name: adminName || name + " Admin",
-            role: "agency_admin",
-            agency_id: facility.id,
-            needs_password_setup: true,
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        const emailEndpoint = `${supabaseUrl}/functions/v1/supabase-functions-send-email`;
+        
+        const emailResponse = await fetch(emailEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseAnonKey}`,
           },
-        },
-      });
-
-      console.log("Generate link result - error:", linkError, "has action_link:", !!linkData?.properties?.action_link);
-
-      if (linkError) {
-        console.error("Error generating magic link:", linkError);
-      } else if (linkData?.properties?.action_link) {
-        // Send the magic link via Brevo
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        
-        console.log("Supabase URL available:", !!supabaseUrl);
-        console.log("Supabase Anon Key available:", !!supabaseAnonKey);
-        
-        if (supabaseUrl && supabaseAnonKey) {
-          try {
-            const emailEndpoint = `${supabaseUrl}/functions/v1/supabase-functions-send-email`;
-            console.log("Calling email endpoint:", emailEndpoint);
-            
-            const emailResponse = await fetch(emailEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${supabaseAnonKey}`,
+          body: JSON.stringify({
+            to: adminEmail,
+            subject: `Welcome to ${name} - Complete Your Setup`,
+            template: {
+              title: `Welcome to ${name}!`,
+              preheader: "Click the link below to complete your facility administrator setup",
+              bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+              ctaButton: {
+                text: "Complete Setup",
+                url: setupUrl,
               },
-              body: JSON.stringify({
-                to: adminEmail,
-                subject: `Welcome to ${name} - Complete Your Setup`,
-                template: {
-                  title: `Welcome to ${name}!`,
-                  preheader: "Click the link below to complete your facility administrator setup",
-                  bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
-                  ctaButton: {
-                    text: "Complete Setup",
-                    url: linkData.properties.action_link,
-                  },
-                  footerText: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
-                },
-              }),
-            });
-            
-            console.log("Email response status:", emailResponse.status);
-            
-            if (!emailResponse.ok) {
-              const errorText = await emailResponse.text();
-              console.error("Error sending email via Brevo:", errorText);
-            } else {
-              console.log("Email sent successfully!");
-            }
-          } catch (emailErr) {
-            console.error("Error calling email function:", emailErr);
-          }
-        } else {
-          console.error("Missing Supabase URL or Anon Key for email sending");
+              footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
+            },
+          }),
+        });
+        
+        if (!emailResponse.ok) {
+          const errorText = await emailResponse.text();
+          console.error("Error sending email via Brevo:", errorText);
         }
-      } else {
-        console.error("No action_link in linkData:", linkData);
+      } catch (emailErr) {
+        console.error("Error calling email function:", emailErr);
       }
     } else {
-      console.log("Service client not available, falling back to signInWithOtp");
-      // Fallback to signInWithOtp if service client not available
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: adminEmail,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: adminName || name + " Admin",
-            role: "agency_admin",
-            agency_id: facility.id,
-            needs_password_setup: true,
-          },
-        },
-      });
-
-      if (otpError) {
-        console.error("Error sending magic link via OTP:", otpError);
-      } else {
-        console.log("Magic link sent via signInWithOtp");
-      }
+      console.error("Missing Supabase URL or Anon Key for email sending");
     }
 
     // Update facility with pending admin info
@@ -503,72 +442,48 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Generate magic link using Admin API and send via Brevo
+  // Send invite email via Brevo with direct link to facility-setup
   const origin = getSiteUrl();
-  const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
+  const setupUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
   
-  const serviceClient = createServiceClient();
-  if (serviceClient) {
-    // Use generateLink to create a magic link
-    const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-      type: "magiclink",
-      email: adminEmail,
-      options: {
-        redirectTo: redirectUrl,
-        data: {
-          full_name: facility.name + " Admin",
-          role: "agency_admin",
-          agency_id: facilityId,
-          needs_password_setup: true,
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseAnonKey}`,
         },
-      },
-    });
-
-    if (linkError) {
-      console.error("Error generating magic link:", linkError);
-      return { error: linkError.message };
-    } else if (linkData?.properties?.action_link) {
-      // Send the magic link via Brevo
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      
-      if (supabaseUrl && supabaseAnonKey) {
-        try {
-          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseAnonKey}`,
+        body: JSON.stringify({
+          to: adminEmail,
+          subject: `Welcome to ${facility.name} - Complete Your Setup`,
+          template: {
+            title: `Welcome to ${facility.name}!`,
+            preheader: "Click the link below to complete your facility administrator setup",
+            bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+            ctaButton: {
+              text: "Complete Setup",
+              url: setupUrl,
             },
-            body: JSON.stringify({
-              to: adminEmail,
-              subject: `Welcome to ${facility.name} - Complete Your Setup`,
-              template: {
-                title: `Welcome to ${facility.name}!`,
-                preheader: "Click the link below to complete your facility administrator setup",
-                bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
-                ctaButton: {
-                  text: "Complete Setup",
-                  url: linkData.properties.action_link,
-                },
-                footerText: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
-              },
-            }),
-          });
-          
-          if (!emailResponse.ok) {
-            const errorText = await emailResponse.text();
-            console.error("Error sending email via Brevo:", errorText);
-            return { error: "Failed to send invite email" };
-          }
-        } catch (emailErr) {
-          console.error("Error calling email function:", emailErr);
-          return { error: "Failed to send invite email" };
-        }
+            footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
+          },
+        }),
+      });
+      
+      if (!emailResponse.ok) {
+        const errorText = await emailResponse.text();
+        console.error("Error sending email via Brevo:", errorText);
+        return { error: "Failed to send invite email" };
       }
+    } catch (emailErr) {
+      console.error("Error calling email function:", emailErr);
+      return { error: "Failed to send invite email" };
     }
   } else {
-    return { error: "Service client not available" };
+    return { error: "Missing email configuration" };
   }
 
   // Update facility with pending admin email if not already set
