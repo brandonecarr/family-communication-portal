@@ -13,6 +13,8 @@ type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"] & {
   } | null;
 };
 
+type Message = Database["public"]["Tables"]["messages"]["Row"];
+
 export default async function AdminMessagesPage({
   searchParams,
 }: {
@@ -100,7 +102,7 @@ export default async function AdminMessagesPage({
   // Group messages by patient_id to get conversation metadata
   const conversationMetadata: Record<string, { lastMessage: any; unreadCount: number }> = {};
   
-  allMessages?.forEach(msg => {
+  allMessages?.forEach((msg: Message) => {
     if (!conversationMetadata[msg.patient_id]) {
       conversationMetadata[msg.patient_id] = {
         lastMessage: msg,
