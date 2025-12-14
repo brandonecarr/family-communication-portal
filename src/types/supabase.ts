@@ -877,6 +877,7 @@ export type Database = {
           last_name: string
           name: string | null
           phone: string | null
+          previous_status: Database["public"]["Enums"]["patient_status"] | null
           status: Database["public"]["Enums"]["patient_status"] | null
           updated_at: string | null
         }
@@ -894,6 +895,7 @@ export type Database = {
           last_name: string
           name?: string | null
           phone?: string | null
+          previous_status?: Database["public"]["Enums"]["patient_status"] | null
           status?: Database["public"]["Enums"]["patient_status"] | null
           updated_at?: string | null
         }
@@ -911,6 +913,7 @@ export type Database = {
           last_name?: string
           name?: string | null
           phone?: string | null
+          previous_status?: Database["public"]["Enums"]["patient_status"] | null
           status?: Database["public"]["Enums"]["patient_status"] | null
           updated_at?: string | null
         }
@@ -1292,7 +1295,12 @@ export type Database = {
       message_category: "internal" | "family"
       message_priority: "low" | "normal" | "high" | "urgent"
       message_status: "sent" | "delivered" | "read"
-      patient_status: "active" | "discharged" | "deceased"
+      patient_status:
+        | "active"
+        | "discharged"
+        | "deceased"
+        | "archived"
+        | "inactive"
       supply_request_status: "pending" | "approved" | "fulfilled" | "cancelled"
       user_role:
         | "family_admin"
@@ -1445,7 +1453,13 @@ export const Constants = {
       message_category: ["internal", "family"],
       message_priority: ["low", "normal", "high", "urgent"],
       message_status: ["sent", "delivered", "read"],
-      patient_status: ["active", "discharged", "deceased"],
+      patient_status: [
+        "active",
+        "discharged",
+        "deceased",
+        "archived",
+        "inactive",
+      ],
       supply_request_status: ["pending", "approved", "fulfilled", "cancelled"],
       user_role: [
         "family_admin",

@@ -2,6 +2,7 @@
 
 import { createClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
+import { sendStyledEmail, emailTemplates } from "@/lib/email";
 
 export async function getNotificationPreferences() {
   const supabase = await createClient();
@@ -75,9 +76,18 @@ export async function sendNotification(notificationData: {
   );
   
   const channels = notificationData.channels || [];
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build';
   
   if (typePreference?.email_enabled && channels.includes("email")) {
-    console.log("Sending email notification:", notificationData);
+    await sendStyledEmail({
+      to: notificationData.recipient,
+      subject: notificationData.subject || "Notification",
+      template: emailTemplates.notification({
+        message: notificationData.message,
+        ctaText: "View in Portal",
+        ctaUrl: baseUrl,
+      }),
+    });
   }
   
   if (typePreference?.sms_enabled && channels.includes("sms")) {
@@ -122,9 +132,16 @@ export async function sendMessageNotification(recipientUserId: string) {
   
   // Send notifications based on user preferences
   if (userPrefs?.email_enabled && user.email) {
-    // In production, integrate with email service (SendGrid, SES, etc.)
-    console.log(`[EMAIL] To: ${user.email} - ${notificationSubject}`);
-    // await sendEmail({ to: user.email, subject: notificationSubject, body: notificationMessage });
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build';
+    await sendStyledEmail({
+      to: user.email,
+      subject: notificationSubject,
+      template: emailTemplates.messageNotification({
+        senderName: "Your Care Team",
+        messagePreview: notificationMessage,
+        portalUrl: `${baseUrl}/family/messages`,
+      }),
+    });
   }
   
   if (userPrefs?.sms_enabled && user.phone) {

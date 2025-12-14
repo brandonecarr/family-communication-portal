@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, MoreVertical, Users, Calendar, Plus, Phone, Mail, MapPin, X } from "lucide-react";
+import { Search, MoreVertical, Users, Calendar, Plus, Phone, Mail, MapPin, X, Eye, UserPlus, CalendarPlus, Edit, Archive } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -40,6 +47,9 @@ interface Patient {
   email?: string;
   address?: string;
   admission_date?: string;
+  date_of_death?: string;
+  discharge_date?: string;
+  previous_status?: string;
   created_at: string;
 }
 
@@ -48,7 +58,11 @@ export default function PatientList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [newPatient, setNewPatient] = useState({
     first_name: "",
     last_name: "",
@@ -58,6 +72,8 @@ export default function PatientList() {
     address: "",
     status: "active",
     admission_date: new Date() as Date | null,
+    date_of_death: null as Date | null,
+    discharge_date: null as Date | null,
   });
   const supabase = createClient();
   const { toast } = useToast();
@@ -104,13 +120,21 @@ export default function PatientList() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [showArchived]);
 
   const fetchPatients = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("patients")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (!showArchived) {
+      query = query.neq("status", "archived");
+    } else {
+      query = query.eq("status", "archived");
+    }
+
+    const { data } = await query;
 
     if (data) {
       setPatients(data);
@@ -184,6 +208,124 @@ export default function PatientList() {
     }
   };
 
+  const handleEditPatient = async () => {
+    if (!selectedPatient) return;
+
+    if (!newPatient.first_name || !newPatient.last_name) {
+      toast({
+        title: "Required fields missing",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("patients")
+        .update({
+          first_name: newPatient.first_name,
+          last_name: newPatient.last_name,
+          date_of_birth: newPatient.date_of_birth ? newPatient.date_of_birth.toISOString().split("T")[0] : null,
+          phone: newPatient.phone || null,
+          email: newPatient.email || null,
+          address: newPatient.address || null,
+          status: newPatient.status,
+          admission_date: newPatient.admission_date ? newPatient.admission_date.toISOString().split("T")[0] : null,
+          date_of_death: newPatient.status === "deceased" && newPatient.date_of_death ? newPatient.date_of_death.toISOString().split("T")[0] : null,
+          discharge_date: newPatient.status === "discharged" && newPatient.discharge_date ? newPatient.discharge_date.toISOString().split("T")[0] : null,
+        })
+        .eq("id", selectedPatient.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Patient updated successfully",
+      });
+
+      setIsEditDialogOpen(false);
+      setSelectedPatient(null);
+      setNewPatient({
+        first_name: "",
+        last_name: "",
+        date_of_birth: null,
+        phone: "",
+        email: "",
+        address: "",
+        status: "active",
+        admission_date: new Date(),
+        date_of_death: null,
+        discharge_date: null,
+      });
+      fetchPatients();
+    } catch (error: any) {
+      console.error("Error updating patient:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update patient",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleArchivePatient = async () => {
+    if (!selectedPatient) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("patients")
+        .update({ status: "archived" })
+        .eq("id", selectedPatient.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Patient archived successfully",
+      });
+
+      setIsArchiveDialogOpen(false);
+      setSelectedPatient(null);
+      fetchPatients();
+    } catch (error: any) {
+      console.error("Error archiving patient:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to archive patient",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openArchiveDialog = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setIsArchiveDialogOpen(true);
+  };
+
+  const openEditDialog = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setNewPatient({
+      first_name: patient.first_name,
+      last_name: patient.last_name,
+      date_of_birth: patient.date_of_birth ? new Date(patient.date_of_birth) : null,
+      phone: patient.phone || "",
+      email: patient.email || "",
+      address: patient.address || "",
+      status: patient.status,
+      admission_date: patient.admission_date ? new Date(patient.admission_date) : new Date(),
+      date_of_death: patient.date_of_death ? new Date(patient.date_of_death) : null,
+      discharge_date: patient.discharge_date ? new Date(patient.discharge_date) : null,
+    });
+    setIsEditDialogOpen(true);
+  };
+
   const statusColors = {
     active: "bg-[#7A9B8E]/20 text-[#7A9B8E]",
     inactive: "bg-muted text-muted-foreground",
@@ -213,6 +355,17 @@ export default function PatientList() {
         >
           <Plus className="h-4 w-4" />
           Add Patient
+        </Button>
+        <Button 
+          variant="outline"
+          className="rounded-full gap-2"
+          onClick={() => {
+            setShowArchived(!showArchived);
+            setSearchQuery("");
+          }}
+        >
+          <Archive className="h-4 w-4" />
+          {showArchived ? "View Active Patients" : "View Archived Patients"}
         </Button>
       </div>
 
@@ -251,9 +404,9 @@ export default function PatientList() {
                         </div>
                         <Badge
                           variant="outline"
-                          className={statusColors[patient.status as keyof typeof statusColors]}
+                          className={statusColors[(showArchived && patient.previous_status ? patient.previous_status : patient.status) as keyof typeof statusColors]}
                         >
-                          {patient.status}
+                          {showArchived && patient.previous_status ? patient.previous_status : patient.status}
                         </Badge>
                       </div>
 
@@ -284,25 +437,63 @@ export default function PatientList() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 pt-2">
-                        <Link href={`/admin/patients/${patient.id}`}>
-                          <Button variant="outline" size="sm" className="rounded-full">
-                            View Details
-                          </Button>
-                        </Link>
-                        <Link href={`/admin/family-access?patient=${patient.id}`}>
-                          <Button variant="outline" size="sm" className="rounded-full">
-                            Manage Family Access
-                          </Button>
-                        </Link>
-                        <Link href={`/admin/visits?patient=${patient.id}&action=schedule`}>
-                          <Button variant="outline" size="sm" className="rounded-full">
-                            Schedule Visit
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="icon" className="ml-auto">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
+                      {/* Deceased Date Display */}
+                      {patient.date_of_death && (
+                        <div className="bg-red-100 border border-red-500 rounded px-2 py-1 w-fit mt-3">
+                          <p className="text-red-600 font-bold text-sm uppercase">
+                            DECEASED: {new Date(patient.date_of_death).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )}
+                      {/* Discharged Date Display */}
+                      {patient.discharge_date && (
+                        <div className="bg-red-100 border border-red-500 rounded px-2 py-1 w-fit mt-3">
+                          <p className="text-red-600 font-bold text-sm uppercase">
+                            DISCHARGED: {new Date(patient.discharge_date).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end pt-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/patients/${patient.id}`} className="flex items-center cursor-pointer">
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/family-access?patient=${patient.id}`} className="flex items-center cursor-pointer">
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Manage Family Access
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/visits?patient=${patient.id}&action=schedule`} className="flex items-center cursor-pointer">
+                                <CalendarPlus className="h-4 w-4 mr-2" />
+                                Schedule Visit
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openEditDialog(patient)} className="cursor-pointer">
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Patient
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => openArchiveDialog(patient)} 
+                              className="cursor-pointer text-orange-600 focus:text-orange-600"
+                            >
+                              <Archive className="h-4 w-4 mr-2" />
+                              Archive Patient
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
@@ -445,6 +636,230 @@ export default function PatientList() {
               disabled={isSubmitting}
             >
               {isSubmitting ? "Adding..." : "Add Patient"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Patient Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Edit Patient</DialogTitle>
+            <DialogDescription>
+              Update the patient's information below. Required fields are marked with *.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_first_name">First Name *</Label>
+                <Input
+                  id="edit_first_name"
+                  placeholder="Enter first name"
+                  value={newPatient.first_name}
+                  onChange={(e) => setNewPatient({ ...newPatient, first_name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_last_name">Last Name *</Label>
+                <Input
+                  id="edit_last_name"
+                  placeholder="Enter last name"
+                  value={newPatient.last_name}
+                  onChange={(e) => setNewPatient({ ...newPatient, last_name: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_dob">Date of Birth</Label>
+                <DatePicker
+                  id="edit_dob"
+                  selected={newPatient.date_of_birth}
+                  onChange={(date) => setNewPatient({ ...newPatient, date_of_birth: date })}
+                  dateFormat="MM/dd/yyyy"
+                  placeholderText="Select date"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_admission_date">Admission Date</Label>
+                <DatePicker
+                  id="edit_admission_date"
+                  selected={newPatient.admission_date}
+                  onChange={(date) => setNewPatient({ ...newPatient, admission_date: date })}
+                  dateFormat="MM/dd/yyyy"
+                  placeholderText="Select date"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit_status">Status</Label>
+              <Select
+                value={newPatient.status}
+                onValueChange={(value) => setNewPatient({ ...newPatient, status: value })}
+              >
+                <SelectTrigger id="edit_status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="discharged">Discharged</SelectItem>
+                  <SelectItem value="deceased">Deceased</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newPatient.status === "deceased" && (
+              <div className="grid gap-2">
+                <Label htmlFor="edit_date_of_death">Date of Death</Label>
+                <DatePicker
+                  id="edit_date_of_death"
+                  selected={newPatient.date_of_death}
+                  onChange={(date) => setNewPatient({ ...newPatient, date_of_death: date })}
+                  dateFormat="MM/dd/yyyy"
+                  placeholderText="Select date"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                />
+              </div>
+            )}
+
+            {newPatient.status === "discharged" && (
+              <div className="grid gap-2">
+                <Label htmlFor="edit_discharge_date">Discharge Date</Label>
+                <DatePicker
+                  id="edit_discharge_date"
+                  selected={newPatient.discharge_date}
+                  onChange={(date) => setNewPatient({ ...newPatient, discharge_date: date })}
+                  dateFormat="MM/dd/yyyy"
+                  placeholderText="Select date"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit_phone">Phone Number</Label>
+              <Input
+                id="edit_phone"
+                type="tel"
+                placeholder="(555) 123-4567"
+                value={newPatient.phone}
+                onChange={(e) => setNewPatient({ ...newPatient, phone: formatPhoneNumber(e.target.value) })}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit_email">Email</Label>
+              <Input
+                id="edit_email"
+                type="email"
+                placeholder="patient@example.com"
+                value={newPatient.email}
+                onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit_address">Address</Label>
+              <Textarea
+                id="edit_address"
+                placeholder="Enter full address"
+                value={newPatient.address}
+                onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setSelectedPatient(null);
+                setNewPatient({
+                  first_name: "",
+                  last_name: "",
+                  date_of_birth: null,
+                  phone: "",
+                  email: "",
+                  address: "",
+                  status: "active",
+                  admission_date: new Date(),
+                  date_of_death: null,
+                  discharge_date: null,
+                });
+              }}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white"
+              onClick={handleEditPatient}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Updating..." : "Update Patient"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archive Patient Dialog */}
+      <Dialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Archive Patient</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive this patient? You can view archived patients later.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedPatient && (
+            <div className="bg-[#FAF8F5] rounded-lg p-4 my-4">
+              <p className="text-sm text-[#666666] mb-1">Patient Name</p>
+              <p className="font-semibold text-[#2D2D2D]">
+                {selectedPatient.first_name} {selectedPatient.last_name}
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsArchiveDialogOpen(false);
+                setSelectedPatient(null);
+              }}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={handleArchivePatient}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Archiving..." : "Archive Patient"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,6 +4,40 @@ import { createClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 
+// Helper function to send invitation email via edge function
+async function sendInvitationEmail(params: {
+  email: string;
+  token: string;
+  inviterName: string;
+  agencyName: string;
+  role: string;
+}) {
+  const supabase = await createClient();
+  
+  // Get the base URL from environment or use a default
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build');
+  
+  const { data, error } = await supabase.functions.invoke('supabase-functions-send-team-invitation', {
+    body: {
+      email: params.email,
+      token: params.token,
+      inviterName: params.inviterName,
+      agencyName: params.agencyName,
+      role: params.role,
+      baseUrl,
+    },
+  });
+
+  if (error) {
+    console.error('Error sending invitation email:', error);
+    // Don't throw - invitation is still created, just email failed
+    return { success: false, error };
+  }
+
+  return { success: true, data };
+}
+
 // Types
 export interface TeamMember {
   id: string;
@@ -209,12 +243,30 @@ export async function inviteTeamMember(data: {
     throw new Error("Failed to create invitation");
   }
 
-  // TODO: Send invitation email
-  // In production, integrate with email service (SendGrid, SES, etc.)
-  console.log(`[EMAIL] Invitation sent to ${data.email} with token ${token}`);
+  // Get agency name for the email
+  const { data: agencyData } = await supabase
+    .from("agencies")
+    .select("name")
+    .eq("id", agencyId)
+    .single();
+
+  // Send invitation email
+  const emailResult = await sendInvitationEmail({
+    email: data.email,
+    token,
+    inviterName: inviterData?.full_name || "A team member",
+    agencyName: agencyData?.name || "the organization",
+    role: data.role,
+  });
+
+  if (!emailResult.success) {
+    console.warn(`[EMAIL] Failed to send invitation email to ${data.email}:`, emailResult.error);
+  } else {
+    console.log(`[EMAIL] Invitation sent to ${data.email}`);
+  }
 
   revalidatePath("/admin/team-management");
-  return { success: true, token };
+  return { success: true, token, emailSent: emailResult.success };
 }
 
 // Resend invitation
@@ -254,11 +306,30 @@ export async function resendInvitation(invitationId: string) {
     throw new Error("Failed to resend invitation");
   }
 
-  // TODO: Send invitation email
-  console.log(`[EMAIL] Invitation resent to ${invitation.email} with token ${token}`);
+  // Get agency name for the email
+  const { data: agencyData } = await supabase
+    .from("agencies")
+    .select("name")
+    .eq("id", invitation.agency_id)
+    .single();
+
+  // Send invitation email
+  const emailResult = await sendInvitationEmail({
+    email: invitation.email,
+    token,
+    inviterName: invitation.invited_by_name || "A team member",
+    agencyName: agencyData?.name || "the organization",
+    role: invitation.role,
+  });
+
+  if (!emailResult.success) {
+    console.warn(`[EMAIL] Failed to resend invitation email to ${invitation.email}:`, emailResult.error);
+  } else {
+    console.log(`[EMAIL] Invitation resent to ${invitation.email}`);
+  }
 
   revalidatePath("/admin/team-management");
-  return { success: true };
+  return { success: true, emailSent: emailResult.success };
 }
 
 // Cancel invitation

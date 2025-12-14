@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +116,7 @@ export default function TeamManagementClient({
   const { toast } = useToast();
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [pendingInvitations, setPendingInvitations] = useState(initialPendingInvitations);
+  const [mounted, setMounted] = useState(false);
   
   // Dialog states
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -130,6 +131,11 @@ export default function TeamManagementClient({
   const [loading, setLoading] = useState(false);
 
   const isAdmin = currentUserRole === "agency_admin" || currentUserRole === "super_admin";
+
+  // Prevent hydration mismatch by only rendering dates after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleInvite = async () => {
     if (!inviteEmail) {
@@ -450,8 +456,8 @@ export default function TeamManagementClient({
                     >
                       {member.status}
                     </Badge>
-                    <span>Joined: {formatDate(member.joinDate)}</span>
-                    <span>Last login: {formatDateTime(member.lastLogin)}</span>
+                    <span>Joined: {mounted ? formatDate(member.joinDate) : "—"}</span>
+                    <span>Last login: {mounted ? formatDateTime(member.lastLogin) : "—"}</span>
                   </div>
                 </div>
 
@@ -565,8 +571,8 @@ export default function TeamManagementClient({
                   <p className="font-medium text-sm">{invite.email}</p>
                   <p className="text-xs text-muted-foreground">
                     Role: {roleLabels[invite.role] || invite.role} | Sent:{" "}
-                    {formatDate(invite.created_at)} | Expires:{" "}
-                    {formatDate(invite.expires_at)}
+                    {mounted ? formatDate(invite.created_at) : "—"} | Expires:{" "}
+                    {mounted ? formatDate(invite.expires_at) : "—"}
                   </p>
                 </div>
                 {isAdmin && (
