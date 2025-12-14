@@ -974,6 +974,50 @@ export type Database = {
           },
         ]
       }
+      team_invitations: {
+        Row: {
+          agency_id: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by_name: string | null
+          role: string
+          status: string | null
+          token: string
+        }
+        Insert: {
+          agency_id?: string | null
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          invited_by_name?: string | null
+          role: string
+          status?: string | null
+          token: string
+        }
+        Update: {
+          agency_id?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by_name?: string | null
+          role?: string
+          status?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_invitations_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       thread_messages: {
         Row: {
           attachments: Json | null

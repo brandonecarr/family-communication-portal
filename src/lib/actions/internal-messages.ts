@@ -84,7 +84,7 @@ async function isStaffUser(supabase: any, userId: string): Promise<boolean> {
     .eq("user_id", userId)
     .single();
 
-  return !!agencyUser && ["agency_admin", "staff", "super_admin"].includes(agencyUser?.role);
+  return !!agencyUser && ["agency_admin", "agency_staff", "super_admin"].includes(agencyUser?.role);
 }
 
 // Get all threads for the current user
@@ -102,18 +102,23 @@ export async function getMessageThreads(
   const agencyId = await getUserAgencyId(supabase);
   const isStaff = await isStaffUser(supabase, user.id);
 
+  // Only get threads where user is a participant
+  const { data: participantThreads } = await supabase
+    .from("thread_participants")
+    .select("thread_id")
+    .eq("user_id", user.id);
+
+  const threadIds = participantThreads?.map((p: any) => p.thread_id) || [];
+
+  if (threadIds.length === 0) {
+    return [];
+  }
+
   // Build query
   let query = supabase
     .from("message_threads")
-    .select(
-      `
-      *,
-      participants:thread_participants(
-        *,
-        user:users(id, full_name, email, avatar_url, role)
-      )
-    `
-    )
+    .select("*")
+    .in("id", threadIds)
     .order("last_message_at", { ascending: false });
 
   // Filter by agency
@@ -138,27 +143,51 @@ export async function getMessageThreads(
     query = query.not("archived_at", "is", null);
   }
 
-  // Only get threads where user is a participant
-  const { data: participantThreads } = await supabase
-    .from("thread_participants")
-    .select("thread_id")
-    .eq("user_id", user.id);
-
-  const threadIds = participantThreads?.map((p: any) => p.thread_id) || [];
-
-  if (threadIds.length > 0) {
-    query = query.in("id", threadIds);
-  } else {
-    return [];
-  }
-
-  const { data, error } = await query;
+  const { data: threads, error } = await query;
 
   if (error) throw error;
 
+  if (!threads || threads.length === 0) {
+    return [];
+  }
+
+  // Get all participants for these threads
+  const { data: allParticipants } = await supabase
+    .from("thread_participants")
+    .select("*")
+    .in("thread_id", threads.map((t: any) => t.id));
+
+  // Get user details for all participants
+  const allParticipantUserIds = [...new Set((allParticipants || []).map((p: any) => p.user_id))];
+  let participantUsers: any[] = [];
+  
+  if (allParticipantUserIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, full_name, email, avatar_url, role")
+      .in("id", allParticipantUserIds);
+    
+    if (users) {
+      participantUsers = users;
+    }
+  }
+
+  const usersMap = new Map(participantUsers.map((u: any) => [u.id, u]));
+
+  // Group participants by thread
+  const participantsByThread = new Map<string, any[]>();
+  (allParticipants || []).forEach((p: any) => {
+    const existing = participantsByThread.get(p.thread_id) || [];
+    existing.push({
+      ...p,
+      user: usersMap.get(p.user_id) || null,
+    });
+    participantsByThread.set(p.thread_id, existing);
+  });
+
   // Get unread counts for each thread
   const threadsWithUnread = await Promise.all(
-    (data || []).map(async (thread: any) => {
+    threads.map(async (thread: any) => {
       // Get all messages in thread
       const { data: threadMessages } = await supabase
         .from("thread_messages")
@@ -178,6 +207,7 @@ export async function getMessageThreads(
 
       return {
         ...thread,
+        participants: participantsByThread.get(thread.id) || [],
         unread_count: unreadCount,
       };
     })
@@ -195,41 +225,79 @@ export async function getThreadWithMessages(threadId: string) {
 
   if (!user) throw new Error("Not authenticated");
 
-  // Get thread with participants
+  // Get thread
   const { data: thread, error: threadError } = await supabase
     .from("message_threads")
-    .select(
-      `
-      *,
-      participants:thread_participants(
-        *,
-        user:users(id, full_name, email, avatar_url, role)
-      )
-    `
-    )
+    .select("*")
     .eq("id", threadId)
     .single();
 
   if (threadError) throw threadError;
 
-  // Get messages with sender info
+  // Get participants
+  const { data: participants, error: participantsError } = await supabase
+    .from("thread_participants")
+    .select("*")
+    .eq("thread_id", threadId);
+
+  if (participantsError) throw participantsError;
+
+  // Get user details for participants
+  const participantUserIds = (participants || []).map((p: any) => p.user_id);
+  let participantUsers: any[] = [];
+  
+  if (participantUserIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, full_name, email, avatar_url, role")
+      .in("id", participantUserIds);
+    
+    if (users) {
+      participantUsers = users;
+    }
+  }
+
+  const usersMap = new Map(participantUsers.map((u: any) => [u.id, u]));
+  const participantsWithUsers = (participants || []).map((p: any) => ({
+    ...p,
+    user: usersMap.get(p.user_id) || null,
+  }));
+
+  // Get messages
   const { data: messages, error: messagesError } = await supabase
     .from("thread_messages")
-    .select(
-      `
-      *,
-      sender:users(id, full_name, email, avatar_url),
-      read_receipts:message_read_receipts(*)
-    `
-    )
+    .select("*")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
   if (messagesError) throw messagesError;
 
+  // Get sender details for messages
+  const senderIds = [...new Set((messages || []).map((m: any) => m.sender_id))];
+  let senderUsers: any[] = [];
+  
+  if (senderIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, full_name, email, avatar_url")
+      .in("id", senderIds);
+    
+    if (users) {
+      senderUsers = users;
+    }
+  }
+
+  const sendersMap = new Map(senderUsers.map((u: any) => [u.id, u]));
+  const messagesWithSenders = (messages || []).map((m: any) => ({
+    ...m,
+    sender: sendersMap.get(m.sender_id) || null,
+    read_receipts: [],
+  }));
+
   return {
     ...thread,
-    messages: messages || [],
+    participants: participantsWithUsers,
+    messages: messagesWithSenders,
   };
 }
 
@@ -348,12 +416,7 @@ export async function sendThreadMessage(
       body,
       attachments,
     })
-    .select(
-      `
-      *,
-      sender:users(id, full_name, email, avatar_url)
-    `
-    )
+    .select("*")
     .single();
 
   if (error) throw error;
@@ -372,8 +435,12 @@ export async function sendThreadMessage(
   if (participants && participants.length > 0) {
     const recipientIds = participants.map((p: any) => p.user_id);
     // Import dynamically to avoid circular dependencies
-    const { sendMessageNotifications } = await import("./notifications");
-    await sendMessageNotifications(recipientIds);
+    try {
+      const { sendMessageNotifications } = await import("./notifications");
+      await sendMessageNotifications(recipientIds);
+    } catch (notifError) {
+      console.error("Error sending notifications:", notifError);
+    }
   }
 
   revalidatePath("/admin/messages");
@@ -455,80 +522,136 @@ export async function getAvailableRecipients(category: "internal" | "family") {
   const agencyId = await getUserAgencyId(supabase);
   if (!agencyId) return [];
 
-  if (category === "internal") {
-    // Get all staff members in the agency
-    const { data: staffUsers, error } = await supabase
-      .from("agency_users")
-      .select(
-        `
-        user_id,
-        role,
-        user:users(id, full_name, email, avatar_url)
-      `
-      )
-      .eq("agency_id", agencyId)
-      .in("role", ["agency_admin", "staff"])
-      .neq("user_id", user.id);
+  try {
+    if (category === "internal") {
+      // Get all staff members in the agency
+      const { data: staffUsers, error } = await supabase
+        .from("agency_users")
+        .select("user_id, role")
+        .eq("agency_id", agencyId)
+        .in("role", ["agency_admin", "agency_staff"])
+        .neq("user_id", user.id);
 
-    if (error) throw error;
+      if (error) {
+        console.error("Error fetching staff users:", error);
+        return [];
+      }
 
-    return (staffUsers || []).map((su: any) => ({
-      id: su.user_id,
-      ...su.user,
-      role: su.role,
-    }));
-  } else {
-    // Get all users in the agency (staff + family members)
-    const { data: agencyUsers, error: agencyError } = await supabase
-      .from("agency_users")
-      .select(
-        `
-        user_id,
-        role,
-        user:users(id, full_name, email, avatar_url)
-      `
-      )
-      .eq("agency_id", agencyId)
-      .neq("user_id", user.id);
+      // Get user details separately
+      const userIds = (staffUsers || []).map((su: any) => su.user_id);
+      if (userIds.length === 0) return [];
 
-    if (agencyError) throw agencyError;
+      const { data: users, error: usersError } = await supabase
+        .from("users")
+        .select("id, full_name, email, avatar_url")
+        .in("id", userIds);
 
-    // Get family members
-    const { data: familyMembers, error: familyError } = await supabase
-      .from("family_members")
-      .select(
-        `
-        user_id,
-        name,
-        email,
-        patient:patients!patient_id(agency_id)
-      `
-      )
-      .not("user_id", "is", null)
-      .neq("user_id", user.id);
+      if (usersError) {
+        console.error("Error fetching user details:", usersError);
+        return [];
+      }
 
-    if (familyError) throw familyError;
+      const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
 
-    // Filter family members by agency
-    const agencyFamilyMembers = (familyMembers || [])
-      .filter((fm: any) => {
-        const patient = Array.isArray(fm.patient) ? fm.patient[0] : fm.patient;
-        return patient?.agency_id === agencyId;
-      })
-      .map((fm: any) => ({
-        id: fm.user_id,
-        full_name: fm.name,
-        email: fm.email,
-        role: "family_member",
-      }));
+      return (staffUsers || []).map((su: any) => {
+        const userData = usersMap.get(su.user_id) || {};
+        return {
+          id: su.user_id,
+          full_name: userData.full_name || null,
+          email: userData.email || null,
+          avatar_url: userData.avatar_url || null,
+          role: su.role,
+        };
+      });
+    } else {
+      // Get all staff users in the agency
+      const { data: agencyUsers, error: agencyError } = await supabase
+        .from("agency_users")
+        .select("user_id, role")
+        .eq("agency_id", agencyId)
+        .neq("user_id", user.id);
 
-    const staffUsers = (agencyUsers || []).map((au: any) => ({
-      id: au.user_id,
-      ...au.user,
-      role: au.role,
-    }));
+      if (agencyError) {
+        console.error("Error fetching agency users:", agencyError);
+        return [];
+      }
 
-    return [...staffUsers, ...agencyFamilyMembers];
+      // Get user details for staff
+      const staffUserIds = (agencyUsers || []).map((au: any) => au.user_id);
+      let staffUsersData: any[] = [];
+      
+      if (staffUserIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from("users")
+          .select("id, full_name, email, avatar_url")
+          .in("id", staffUserIds);
+
+        if (!usersError && users) {
+          staffUsersData = users;
+        }
+      }
+
+      const staffUsersMap = new Map(staffUsersData.map((u: any) => [u.id, u]));
+
+      const staffUsers = (agencyUsers || []).map((au: any) => {
+        const userData = staffUsersMap.get(au.user_id) || {};
+        return {
+          id: au.user_id,
+          full_name: userData.full_name || null,
+          email: userData.email || null,
+          avatar_url: userData.avatar_url || null,
+          role: au.role,
+        };
+      });
+
+      // Get family members
+      const { data: familyMembers, error: familyError } = await supabase
+        .from("family_members")
+        .select("user_id, name, email, patient_id")
+        .not("user_id", "is", null)
+        .neq("user_id", user.id);
+
+      if (familyError) {
+        console.error("Error fetching family members:", familyError);
+        return staffUsers;
+      }
+
+      // Get patients to filter by agency
+      const patientIds = (familyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
+      let patientsData: any[] = [];
+      
+      if (patientIds.length > 0) {
+        const { data: patients } = await supabase
+          .from("patients")
+          .select("id, agency_id")
+          .in("id", patientIds);
+        
+        if (patients) {
+          patientsData = patients;
+        }
+      }
+
+      const patientsMap = new Map(patientsData.map((p: any) => [p.id, p]));
+
+      // Filter family members by agency
+      const agencyFamilyMembers = (familyMembers || [])
+        .filter((fm: any) => {
+          const patient = patientsMap.get(fm.patient_id);
+          return patient?.agency_id === agencyId;
+        })
+        .map((fm: any) => ({
+          id: fm.user_id,
+          full_name: fm.name,
+          email: fm.email,
+          avatar_url: null,
+          role: "family_member",
+        }));
+
+      return [...staffUsers, ...agencyFamilyMembers];
+    }
+  } catch (error) {
+    console.error("Error in getAvailableRecipients:", error);
+    return [];
   }
 }
 

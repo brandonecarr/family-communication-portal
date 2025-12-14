@@ -69,7 +69,7 @@ export default function MessagesClientNew({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if user is staff (can see internal messages)
-  const isStaff = ["agency_admin", "staff", "super_admin"].includes(userRole);
+  const isStaff = ["agency_admin", "agency_staff", "super_admin"].includes(userRole);
 
   // State - default to family tab for non-staff users
   const [activeTab, setActiveTab] = useState<"internal" | "family">(isStaff ? "internal" : "family");
