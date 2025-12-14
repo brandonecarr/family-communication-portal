@@ -107,7 +107,7 @@ export default async function AdminSuppliesPage() {
                         </p>
                       </div>
                       <Badge variant="outline" className={config}>
-                        {request.status.toUpperCase()}
+                        {request.status?.toUpperCase() || 'PENDING'}
                       </Badge>
                     </div>
 
