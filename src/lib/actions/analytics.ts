@@ -93,7 +93,7 @@ export async function getAnalyticsSummary() {
     eventsByDay: {} as Record<string, number>,
   };
   
-  events?.forEach((event) => {
+  events?.forEach((event: any) => {
     summary.eventsByType[event.event_type] = 
       (summary.eventsByType[event.event_type] || 0) + 1;
     

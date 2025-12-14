@@ -113,7 +113,7 @@ async function generateEngagementReport() {
   
   return {
     totalEvents: events?.length || 0,
-    uniqueUsers: new Set(events?.map((e) => e.patient_id)).size,
+    uniqueUsers: new Set(events?.map((e: any) => e.patient_id)).size,
   };
 }
 
@@ -124,7 +124,7 @@ async function generateMessagesReport() {
     .from("messages")
     .select("*");
   
-  const readMessages = messages?.filter((m) => m.read).length || 0;
+  const readMessages = messages?.filter((m: any) => m.read).length || 0;
   const totalMessages = messages?.length || 0;
   
   return {
@@ -141,7 +141,7 @@ async function generateSupplyReport() {
     .from("supply_requests")
     .select("*");
   
-  const fulfilled = requests?.filter((r) => r.status === "fulfilled").length || 0;
+  const fulfilled = requests?.filter((r: any) => r.status === "fulfilled").length || 0;
   const total = requests?.length || 0;
   
   return {
