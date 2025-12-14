@@ -14,6 +14,11 @@ import {
   Clock
 } from "lucide-react";
 import Link from "next/link";
+import { Database } from "@/types/supabase";
+
+type Delivery = Database["public"]["Tables"]["deliveries"]["Row"];
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminDeliveriesPage() {
   const supabase = await createClient();
@@ -82,7 +87,7 @@ export default async function AdminDeliveriesPage() {
 
       {/* Delivery List */}
       <div className="grid gap-4">
-        {deliveries?.map((delivery) => {
+        {deliveries?.map((delivery: Delivery) => {
           const config = statusColors[delivery.status as keyof typeof statusColors] || statusColors.scheduled;
           const StatusIcon = delivery.status === "delivered" ? CheckCircle2 : Truck;
 

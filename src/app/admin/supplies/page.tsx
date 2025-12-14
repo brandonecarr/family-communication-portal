@@ -13,6 +13,11 @@ import {
   XCircle,
   User
 } from "lucide-react";
+import { Database } from "@/types/supabase";
+
+type SupplyRequest = Database["public"]["Tables"]["supply_requests"]["Row"];
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminSuppliesPage() {
   const supabase = await createClient();
@@ -79,7 +84,7 @@ export default async function AdminSuppliesPage() {
 
       {/* Request List */}
       <div className="grid gap-4">
-        {requests?.map((request) => {
+        {requests?.map((request: SupplyRequest) => {
           const config = statusColors[request.status as keyof typeof statusColors] || statusColors.pending;
           const items = request.items as Record<string, number>;
           const itemCount = Object.keys(items).length;
