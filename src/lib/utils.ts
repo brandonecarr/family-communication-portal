@@ -7,13 +7,18 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Get the site URL for redirects and callbacks.
- * Uses NEXT_PUBLIC_SITE_URL if available, otherwise falls back to window.location.origin on client.
+ * Uses NEXT_PUBLIC_SITE_URL environment variable.
+ * This MUST be set in production to the correct domain.
  */
 export function getSiteUrl(): string {
-  // Server-side: use environment variable
-  if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_SITE_URL || "";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  
+  if (!siteUrl) {
+    console.error("NEXT_PUBLIC_SITE_URL is not set! Email links will be broken.");
+    // Return empty string - this will cause obvious failures rather than wrong redirects
+    return "";
   }
-  // Client-side: prefer env var, fallback to window.location.origin
-  return process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+  
+  // Remove trailing slash if present
+  return siteUrl.replace(/\/$/, "");
 }

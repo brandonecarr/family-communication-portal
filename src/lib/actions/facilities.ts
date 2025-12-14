@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "../../../supabase/server";
+import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import { getSiteUrl } from "@/lib/utils";
 
@@ -102,48 +102,30 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Send invite email via Brevo with direct link to facility-setup
+    // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
     const origin = getSiteUrl();
-    const setupUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
+    const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
     
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (supabaseUrl && supabaseAnonKey) {
-      try {
-        const emailEndpoint = `${supabaseUrl}/functions/v1/supabase-functions-send-email`;
-        
-        const emailResponse = await fetch(emailEndpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabaseAnonKey}`,
+    const serviceClient = createServiceClient();
+    if (serviceClient) {
+      const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
+        adminEmail,
+        {
+          data: {
+            full_name: adminName || name + " Admin",
+            role: "agency_admin",
+            agency_id: facility.id,
+            needs_password_setup: true,
           },
-          body: JSON.stringify({
-            to: adminEmail,
-            subject: `Welcome to ${name} - Complete Your Setup`,
-            template: {
-              title: `Welcome to ${name}!`,
-              preheader: "Click the link below to complete your facility administrator setup",
-              bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
-              ctaButton: {
-                text: "Complete Setup",
-                url: setupUrl,
-              },
-              footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
-            },
-          }),
-        });
-        
-        if (!emailResponse.ok) {
-          const errorText = await emailResponse.text();
-          console.error("Error sending email via Brevo:", errorText);
+          redirectTo: redirectUrl,
         }
-      } catch (emailErr) {
-        console.error("Error calling email function:", emailErr);
+      );
+
+      if (inviteError) {
+        console.error("Error inviting user:", inviteError);
       }
     } else {
-      console.error("Missing Supabase URL or Anon Key for email sending");
+      console.error("Service client not available for sending invite");
     }
 
     // Update facility with pending admin info
@@ -442,48 +424,31 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Send invite email via Brevo with direct link to facility-setup
+  // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
   const origin = getSiteUrl();
-  const setupUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
+  const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
   
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (supabaseUrl && supabaseAnonKey) {
-    try {
-      const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseAnonKey}`,
+  const serviceClient = createServiceClient();
+  if (serviceClient) {
+    const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
+      adminEmail,
+      {
+        data: {
+          full_name: facility.name + " Admin",
+          role: "agency_admin",
+          agency_id: facilityId,
+          needs_password_setup: true,
         },
-        body: JSON.stringify({
-          to: adminEmail,
-          subject: `Welcome to ${facility.name} - Complete Your Setup`,
-          template: {
-            title: `Welcome to ${facility.name}!`,
-            preheader: "Click the link below to complete your facility administrator setup",
-            bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
-            ctaButton: {
-              text: "Complete Setup",
-              url: setupUrl,
-            },
-            footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
-          },
-        }),
-      });
-      
-      if (!emailResponse.ok) {
-        const errorText = await emailResponse.text();
-        console.error("Error sending email via Brevo:", errorText);
-        return { error: "Failed to send invite email" };
+        redirectTo: redirectUrl,
       }
-    } catch (emailErr) {
-      console.error("Error calling email function:", emailErr);
-      return { error: "Failed to send invite email" };
+    );
+
+    if (inviteError) {
+      console.error("Error inviting user:", inviteError);
+      return { error: inviteError.message };
     }
   } else {
-    return { error: "Missing email configuration" };
+    return { error: "Service client not available" };
   }
 
   // Update facility with pending admin email if not already set
