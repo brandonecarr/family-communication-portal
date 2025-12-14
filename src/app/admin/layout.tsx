@@ -4,6 +4,8 @@ import AdminSidebar from "@/components/admin/admin-sidebar";
 import AdminHeader from "@/components/admin/admin-header";
 import { NotificationProvider } from "@/components/notification-provider";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
