@@ -25,10 +25,10 @@ export default async function SuperAdminDashboard() {
   ]);
 
   const totalFacilities = agenciesResult.count || 0;
-  const activeFacilities = agenciesResult.data?.filter(a => a.status === "active").length || 0;
+  const activeFacilities = agenciesResult.data?.filter((a: any) => a.status === "active").length || 0;
   const totalUsers = usersResult.count || 0;
   const totalPatients = patientsResult.count || 0;
-  const activePatients = patientsResult.data?.filter(p => p.status === "active").length || 0;
+  const activePatients = patientsResult.data?.filter((p: any) => p.status === "active").length || 0;
   const totalFamilyMembers = familyResult.count || 0;
 
   // Fetch recent facilities
