@@ -17,11 +17,24 @@ export async function GET(request: Request) {
       const needsPasswordSetup = user.user_metadata?.needs_password_setup;
       const agencyId = user.user_metadata?.agency_id || facility;
       
-      // If user came from a facility invite, redirect to setup
+      // If user came from a facility invite, redirect to facility-setup
       if (needsPasswordSetup && agencyId) {
-        const setupUrl = new URL("/admin/setup", requestUrl.origin);
+        // Check if there's a pending invite token
+        const { data: invite } = await supabase
+          .from("facility_invites")
+          .select("token")
+          .eq("email", user.email)
+          .eq("agency_id", agencyId)
+          .eq("status", "pending")
+          .single();
+        
+        const setupUrl = new URL("/facility-setup", requestUrl.origin);
         setupUrl.searchParams.set("facility", agencyId);
-        if (token) setupUrl.searchParams.set("token", token);
+        if (invite?.token) {
+          setupUrl.searchParams.set("token", invite.token);
+        } else if (token) {
+          setupUrl.searchParams.set("token", token);
+        }
         return NextResponse.redirect(setupUrl);
       }
     }
