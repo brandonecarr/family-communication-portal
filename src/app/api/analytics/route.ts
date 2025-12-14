@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       eventsByDay: {} as Record<string, number>,
     };
     
-    data?.forEach((event) => {
+    data?.forEach((event: any) => {
       summary.eventsByType[event.event_type] = 
         (summary.eventsByType[event.event_type] || 0) + 1;
       
