@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "../../../supabase/server";
+import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import { getSiteUrl } from "@/lib/utils";
 
@@ -102,24 +102,31 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Send magic link email using Supabase Auth
+    // Send invite email using Supabase Admin API
     const origin = getSiteUrl();
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: adminEmail,
-      options: {
-        emailRedirectTo: `${origin}/admin/setup?token=${token}&facility=${facility.id}`,
-        data: {
-          full_name: adminName || name + " Admin",
-          role: "agency_admin",
-          agency_id: facility.id,
-          needs_password_setup: true,
-        },
-      },
-    });
+    const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
+    
+    const serviceClient = createServiceClient();
+    if (serviceClient) {
+      const { error: inviteError2 } = await serviceClient.auth.admin.inviteUserByEmail(
+        adminEmail,
+        {
+          redirectTo: redirectUrl,
+          data: {
+            full_name: adminName || name + " Admin",
+            role: "agency_admin",
+            agency_id: facility.id,
+            needs_password_setup: true,
+          },
+        }
+      );
 
-    if (otpError) {
-      console.error("Error sending magic link:", otpError);
-      // Don't fail the whole operation, just log the error
+      if (inviteError2) {
+        console.error("Error sending invite email:", inviteError2);
+        // Don't fail the whole operation, just log the error
+      }
+    } else {
+      console.error("Service client not available for sending invite");
     }
 
     // Update facility with pending admin info
@@ -418,24 +425,31 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Send magic link
+  // Send invite email using Admin API
   const origin = getSiteUrl();
-  const { error: otpError } = await supabase.auth.signInWithOtp({
-    email: adminEmail,
-    options: {
-      emailRedirectTo: `${origin}/facility-setup?token=${token}&facility=${facilityId}`,
+  const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
+  
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    return { error: "Service client not available" };
+  }
+  
+  const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
+    adminEmail,
+    {
+      redirectTo: redirectUrl,
       data: {
         full_name: facility.name + " Admin",
         role: "agency_admin",
         agency_id: facilityId,
         needs_password_setup: true,
       },
-    },
-  });
+    }
+  );
 
-  if (otpError) {
-    console.error("Error sending invite:", otpError);
-    return { error: otpError.message };
+  if (inviteError) {
+    console.error("Error sending invite:", inviteError);
+    return { error: inviteError.message };
   }
 
   // Update facility with pending admin email if not already set

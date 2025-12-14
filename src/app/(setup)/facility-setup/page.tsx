@@ -32,6 +32,7 @@ function AdminSetupContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const facilityId = searchParams.get("facility");
+  const authCode = searchParams.get("code");
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ function AdminSetupContent() {
   const [facility, setFacility] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
+  const [authProcessed, setAuthProcessed] = useState(false);
   
   const [formData, setFormData] = useState({
     password: "",
@@ -60,8 +62,28 @@ function AdminSetupContent() {
 
   const supabase = createClient();
 
+  // Handle auth code exchange if present
+  useEffect(() => {
+    const exchangeCode = async () => {
+      if (authCode && !authProcessed) {
+        setAuthProcessed(true);
+        try {
+          await supabase.auth.exchangeCodeForSession(authCode);
+        } catch (err) {
+          console.error("Error exchanging code:", err);
+        }
+      }
+    };
+    exchangeCode();
+  }, [authCode, authProcessed, supabase.auth]);
+
   useEffect(() => {
     const loadData = async () => {
+      // Wait for auth code exchange to complete
+      if (authCode && !authProcessed) {
+        return;
+      }
+      
       setLoading(true);
       
       const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -107,7 +129,7 @@ function AdminSetupContent() {
     };
 
     loadData();
-  }, [facilityId, router]);
+  }, [facilityId, router, authCode, authProcessed]);
 
   const handlePasswordSetup = async () => {
     if (formData.password !== formData.confirmPassword) {
