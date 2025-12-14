@@ -7,6 +7,9 @@ export async function GET(request: Request) {
   const redirect_to = requestUrl.searchParams.get("redirect_to");
   const token = requestUrl.searchParams.get("token");
   const facility = requestUrl.searchParams.get("facility");
+  
+  // Use the configured site URL, not localhost
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
 
   if (code) {
     const supabase = await createClient();
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
       
       // If user has pending invite OR needs password setup, redirect to facility-setup
       if (pendingInvite) {
-        const setupUrl = new URL("/facility-setup", requestUrl.origin);
+        const setupUrl = new URL("/facility-setup", siteUrl);
         setupUrl.searchParams.set("facility", pendingInvite.agency_id);
         setupUrl.searchParams.set("token", pendingInvite.token);
         return NextResponse.redirect(setupUrl);
@@ -35,7 +38,7 @@ export async function GET(request: Request) {
       
       // Fallback: check metadata
       if (needsPasswordSetup && agencyId) {
-        const setupUrl = new URL("/facility-setup", requestUrl.origin);
+        const setupUrl = new URL("/facility-setup", siteUrl);
         setupUrl.searchParams.set("facility", agencyId);
         if (token) {
           setupUrl.searchParams.set("token", token);
@@ -47,5 +50,5 @@ export async function GET(request: Request) {
 
   // URL to redirect to after sign in process completes
   const redirectTo = redirect_to || "/dashboard";
-  return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
+  return NextResponse.redirect(new URL(redirectTo, siteUrl));
 } 
