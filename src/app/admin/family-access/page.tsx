@@ -71,7 +71,7 @@ export default async function AdminFamilyAccessPage({
 
   // Fetch selected patient details if provided
   const selectedPatient = selectedPatientId
-    ? patients?.find((p) => p.id === selectedPatientId)
+    ? patients?.find((p: { id: string; name: string }) => p.id === selectedPatientId)
     : null;
 
   // Fetch all family members (filter by patient if provided)
