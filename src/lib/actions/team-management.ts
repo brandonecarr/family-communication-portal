@@ -101,7 +101,7 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
   const usersMap = new Map(users.map((u: any) => [u.id, u]));
 
   return (agencyUsers || []).map((au: any) => {
-    const userData = usersMap.get(au.user_id) || {};
+    const userData: any = usersMap.get(au.user_id) || {};
     return {
       id: au.user_id,
       name: userData.full_name || "Unknown",
