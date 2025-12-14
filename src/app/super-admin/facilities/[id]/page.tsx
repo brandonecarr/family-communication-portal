@@ -98,7 +98,7 @@ export default async function FacilityDetailPage({
     .order("name");
 
   // Fetch family members through patients
-  const patientIds = patients?.map(p => p.id) || [];
+  const patientIds = patients?.map((p: any) => p.id) || [];
   const { data: familyMembers } = patientIds.length > 0 
     ? await supabase
         .from("family_members")
