@@ -103,15 +103,15 @@ export default async function AdminMessagesPage({
   const conversationMetadata: Record<string, { lastMessage: any; unreadCount: number }> = {};
   
   allMessages?.forEach((msg: Message) => {
-    if (!conversationMetadata[msg.patient_id]) {
-      conversationMetadata[msg.patient_id] = {
+    if (!conversationMetadata[msg.patient_id!]) {
+      conversationMetadata[msg.patient_id!] = {
         lastMessage: msg,
         unreadCount: 0
       };
     }
     // Count unread messages from family members
     if (!msg.read && msg.sender_type === "family") {
-      conversationMetadata[msg.patient_id].unreadCount++;
+      conversationMetadata[msg.patient_id!].unreadCount++;
     }
   });
 
