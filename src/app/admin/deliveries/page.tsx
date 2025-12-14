@@ -16,7 +16,11 @@ import {
 import Link from "next/link";
 import { Database } from "@/types/supabase";
 
-type Delivery = Database["public"]["Tables"]["deliveries"]["Row"];
+type Delivery = Database["public"]["Tables"]["deliveries"]["Row"] & {
+  patient?: {
+    name: string;
+  } | null;
+};
 
 export const dynamic = "force-dynamic";
 
