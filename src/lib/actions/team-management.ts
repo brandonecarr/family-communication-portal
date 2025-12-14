@@ -14,9 +14,9 @@ async function sendInvitationEmail(params: {
 }) {
   const supabase = await createClient();
   
-  // Get the base URL from environment or use a default
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-    (typeof window !== 'undefined' ? window.location.origin : 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build');
+  // Get the base URL from environment
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
   
   const { data, error } = await supabase.functions.invoke('supabase-functions-send-team-invitation', {
     body: {
@@ -134,6 +134,8 @@ export async function getPendingInvitations(): Promise<TeamInvitation[]> {
   const agencyId = currentUserAgency?.agency_id;
   if (!agencyId) return [];
 
+  console.log(`[DEBUG] Fetching pending invitations for agency ${agencyId}`);
+
   // Fetch pending invitations
   const { data: invitations, error } = await supabase
     .from("team_invitations")
@@ -147,7 +149,19 @@ export async function getPendingInvitations(): Promise<TeamInvitation[]> {
     return [];
   }
 
-  return (invitations || []).map((inv: any) => ({
+  console.log(`[DEBUG] Found ${invitations?.length || 0} pending invitations for agency ${agencyId}`);
+
+  // Also fetch users who have been invited but haven't completed onboarding
+  const { data: pendingUsers } = await supabase
+    .from("users")
+    .select("id, email, full_name, role, created_at")
+    .eq("agency_id", agencyId)
+    .eq("onboarding_completed", false);
+
+  console.log(`[DEBUG] Found ${pendingUsers?.length || 0} pending users (not completed onboarding) for agency ${agencyId}`);
+
+  // Combine both sources of pending invitations
+  const teamInvitations = (invitations || []).map((inv: any) => ({
     id: inv.id,
     email: inv.email,
     role: inv.role,
@@ -157,6 +171,20 @@ export async function getPendingInvitations(): Promise<TeamInvitation[]> {
     created_at: inv.created_at,
     invited_by_name: inv.invited_by_name,
   }));
+
+  // Add pending users as invitations
+  const pendingUserInvitations = (pendingUsers || []).map((user: any) => ({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    status: "pending",
+    token: "",
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+    created_at: user.created_at,
+    invited_by_name: "System",
+  }));
+
+  return [...teamInvitations, ...pendingUserInvitations];
 }
 
 // Invite a new team member
@@ -242,6 +270,8 @@ export async function inviteTeamMember(data: {
     console.error("Error creating invitation:", error);
     throw new Error("Failed to create invitation");
   }
+
+  console.log(`[DEBUG] Created invitation for ${data.email} with agency_id ${agencyId}`);
 
   // Get agency name for the email
   const { data: agencyData } = await supabase

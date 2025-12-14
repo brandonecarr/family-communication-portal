@@ -76,7 +76,7 @@ export async function sendNotification(notificationData: {
   );
   
   const channels = notificationData.channels || [];
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
   
   if (typePreference?.email_enabled && channels.includes("email")) {
     await sendStyledEmail({
@@ -132,7 +132,7 @@ export async function sendMessageNotification(recipientUserId: string) {
   
   // Send notifications based on user preferences
   if (userPrefs?.email_enabled && user.email) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://0aa269cc-aa4c-4f44-98ea-7727fc96ae89.canvases.tempo.build';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
     await sendStyledEmail({
       to: user.email,
       subject: notificationSubject,

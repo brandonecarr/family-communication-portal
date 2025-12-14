@@ -102,7 +102,10 @@ export async function createFacility(formData: FormData) {
     }
 
     // Send magic link email using Supabase Auth
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!origin) {
+      throw new Error("NEXT_PUBLIC_SITE_URL environment variable is not set");
+    }
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: adminEmail,
       options: {
@@ -418,7 +421,10 @@ export async function resendFacilityInvite(facilityId: string) {
   }
 
   // Send magic link
-  const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const origin = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!origin) {
+    throw new Error("NEXT_PUBLIC_SITE_URL environment variable is not set");
+  }
   const { error: otpError } = await supabase.auth.signInWithOtp({
     email: adminEmail,
     options: {
@@ -471,7 +477,7 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
             agency_id: facilityId,
             needs_password_setup: true,
           },
-          redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('/auth/v1', '')}/facility-setup?facility=${facilityId}`,
+          redirectTo: `${origin}/facility-setup?facility=${facilityId}`,
         }
       );
 

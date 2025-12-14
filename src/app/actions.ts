@@ -133,7 +133,7 @@ export const signInAction = async (formData: FormData) => {
 export const forgotPasswordAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const supabase = await createClient();
-  const origin = headers().get("origin");
+  const origin = headers().get("origin") || process.env.NEXT_PUBLIC_SITE_URL;
   const callbackUrl = formData.get("callbackUrl")?.toString();
 
   if (!email) {

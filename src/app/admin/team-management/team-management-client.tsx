@@ -575,7 +575,7 @@ export default function TeamManagementClient({
                     {mounted ? formatDate(invite.expires_at) : "—"}
                   </p>
                 </div>
-                {isAdmin && (
+                {isAdmin && invite.token && (
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -596,6 +596,11 @@ export default function TeamManagementClient({
                       Cancel
                     </Button>
                   </div>
+                )}
+                {isAdmin && !invite.token && (
+                  <Badge className="bg-amber-100 text-amber-800">
+                    Awaiting Setup
+                  </Badge>
                 )}
               </div>
             ))
