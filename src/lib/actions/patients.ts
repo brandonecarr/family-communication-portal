@@ -148,6 +148,10 @@ export async function inviteFamilyMember(formData: FormData) {
 export async function inviteFamilyMemberAction(formData: FormData) {
   const supabase = createServiceClient();
   
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
+  
   const patient_id = formData.get("patient_id") as string;
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
@@ -218,6 +222,10 @@ export async function inviteFamilyMemberAction(formData: FormData) {
 
 export async function updateFamilyMember(formData: FormData) {
   const supabase = createServiceClient();
+  
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
   
   const id = formData.get("id") as string;
   const patient_id = formData.get("patient_id") as string;
@@ -291,6 +299,10 @@ export async function updateFamilyMember(formData: FormData) {
 
 export async function deleteFamilyMember(id: string, patient_id: string) {
   const supabase = createServiceClient();
+  
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
   
   const { error } = await supabase
     .from("family_members")

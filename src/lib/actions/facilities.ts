@@ -457,6 +457,10 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
   const { createServiceClient } = await import("../../../supabase/server");
   const supabase = createServiceClient();
   
+  if (!supabase) {
+    return { success: false, error: "Service client not available" };
+  }
+  
   const results = [];
   
   for (const staff of staffMembers) {

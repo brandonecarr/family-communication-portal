@@ -61,6 +61,10 @@ export async function createVisit(visitData: {
 }) {
   const supabase = createServiceClient();
   
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
+  
   const { data, error } = await supabase
     .from("visits")
     .insert({
@@ -93,6 +97,10 @@ export async function updateVisitStatus(
 ) {
   const supabase = createServiceClient();
   
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
+  
   const updateData: any = { status, updated_at: new Date().toISOString() };
   if (notes) updateData.notes = notes;
   
@@ -121,6 +129,10 @@ export async function updateVisit(visitId: string, visitData: {
 }) {
   const supabase = createServiceClient();
   
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
+  
   const { data, error } = await supabase
     .from("visits")
     .update({
@@ -144,6 +156,10 @@ export async function updateVisit(visitId: string, visitData: {
 
 export async function deleteVisit(visitId: string) {
   const supabase = createServiceClient();
+  
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
   
   const { error } = await supabase
     .from("visits")
