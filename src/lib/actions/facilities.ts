@@ -103,8 +103,9 @@ export async function createFacility(formData: FormData) {
     }
 
     // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
+    // The redirect goes to /auth/callback which then redirects to /facility-setup
     const origin = getSiteUrl();
-    const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
+    const redirectUrl = `${origin}/auth/callback?token=${token}&facility=${facility.id}`;
     
     const serviceClient = createServiceClient();
     if (serviceClient) {
@@ -425,8 +426,9 @@ export async function resendFacilityInvite(facilityId: string) {
   }
 
   // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
+  // The redirect goes to /auth/callback which then redirects to /facility-setup
   const origin = getSiteUrl();
-  const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
+  const redirectUrl = `${origin}/auth/callback?token=${token}&facility=${facilityId}`;
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
@@ -486,7 +488,7 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
             agency_id: facilityId,
             needs_password_setup: true,
           },
-          redirectTo: `${origin}/facility-setup?facility=${facilityId}`,
+          redirectTo: `${origin}/auth/callback?facility=${facilityId}`,
         }
       );
 
