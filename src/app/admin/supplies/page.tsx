@@ -18,6 +18,7 @@ import { Database } from "@/types/supabase";
 type SupplyRequest = Database["public"]["Tables"]["supply_requests"]["Row"] & {
   patient?: { name: string } | null;
   notes?: string | null;
+  requester?: { email: string } | null;
 };
 
 export const dynamic = "force-dynamic";
