@@ -56,7 +56,7 @@ export default async function SuperAdminFacilitiesPage({
   const { data: facilities } = await query;
 
   // Filter by search if provided
-  const filteredFacilities = facilities?.filter(f => 
+  const filteredFacilities = facilities?.filter((f: any) => 
     !searchQuery || 
     f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     f.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
