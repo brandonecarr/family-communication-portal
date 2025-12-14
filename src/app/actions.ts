@@ -49,6 +49,10 @@ export const signUpAction = async (formData: FormData) => {
 
   if (error) {
     console.error(error.code + " " + error.message);
+    // Check if this is a configuration error
+    if (error.message === "No Supabase credentials") {
+      return encodedRedirect("error", "/sign-up", "Server configuration error. Please contact support.");
+    }
     return encodedRedirect("error", "/sign-up", error.message);
   }
 
@@ -119,6 +123,10 @@ export const signInAction = async (formData: FormData) => {
   });
 
   if (error) {
+    // Check if this is a configuration error
+    if (error.message === "No Supabase credentials") {
+      return encodedRedirect("error", "/sign-in", "Server configuration error. Please contact support.");
+    }
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
@@ -141,6 +149,10 @@ export const forgotPasswordAction = async (formData: FormData) => {
 
   if (error) {
     console.error(error.message);
+    // Check if this is a configuration error
+    if (error.message === "No Supabase credentials") {
+      return encodedRedirect("error", "/forgot-password", "Server configuration error. Please contact support.");
+    }
     return encodedRedirect(
       "error",
       "/forgot-password",
