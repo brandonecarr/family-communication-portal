@@ -158,7 +158,7 @@ export async function getMessageThreads(
     .in("thread_id", threads.map((t: any) => t.id));
 
   // Get user details for all participants
-  const allParticipantUserIds = [...new Set((allParticipants || []).map((p: any) => p.user_id))];
+  const allParticipantUserIds = Array.from(new Set((allParticipants || []).map((p: any) => p.user_id)));
   let participantUsers: any[] = [];
   
   if (allParticipantUserIds.length > 0) {
