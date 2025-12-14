@@ -105,11 +105,8 @@ export const signUpAction = async (formData: FormData) => {
     }
   }
 
-  return encodedRedirect(
-    "success",
-    "/sign-up",
-    "Thanks for signing up! Please check your email for a verification link.",
-  );
+  // Redirect to dashboard - no email confirmation required
+  return redirect("/dashboard");
 };
 
 export const signInAction = async (formData: FormData) => {
