@@ -17,6 +17,23 @@ export const updateSession = async (request: NextRequest) => {
     return response;
   }
 
+  // Check if this is an auth callback with a code parameter
+  const code = request.nextUrl.searchParams.get("code");
+  const isRootPath = request.nextUrl.pathname === "/";
+  
+  // If there's a code on the root path, redirect to auth/callback to handle it
+  if (code && isRootPath) {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    callbackUrl.searchParams.set("code", code);
+    // Preserve any other query params
+    request.nextUrl.searchParams.forEach((value, key) => {
+      if (key !== "code") {
+        callbackUrl.searchParams.set(key, value);
+      }
+    });
+    return NextResponse.redirect(callbackUrl);
+  }
+
   try {
     const supabase = createServerClient(
       supabaseUrl,
