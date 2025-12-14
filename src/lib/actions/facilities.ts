@@ -102,15 +102,17 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Send invite email using Supabase Admin API
+    // Generate magic link using Admin API and send via Brevo
     const origin = getSiteUrl();
     const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
     
     const serviceClient = createServiceClient();
     if (serviceClient) {
-      const { error: inviteError2 } = await serviceClient.auth.admin.inviteUserByEmail(
-        adminEmail,
-        {
+      // Use generateLink to create a magic link
+      const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+        type: "magiclink",
+        email: adminEmail,
+        options: {
           redirectTo: redirectUrl,
           data: {
             full_name: adminName || name + " Admin",
@@ -118,15 +120,65 @@ export async function createFacility(formData: FormData) {
             agency_id: facility.id,
             needs_password_setup: true,
           },
-        }
-      );
+        },
+      });
 
-      if (inviteError2) {
-        console.error("Error sending invite email:", inviteError2);
-        // Don't fail the whole operation, just log the error
+      if (linkError) {
+        console.error("Error generating magic link:", linkError);
+      } else if (linkData?.properties?.action_link) {
+        // Send the magic link via Brevo
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseAnonKey) {
+          try {
+            const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseAnonKey}`,
+              },
+              body: JSON.stringify({
+                to: adminEmail,
+                subject: `Welcome to ${name} - Complete Your Setup`,
+                template: {
+                  preheader: "Click the link below to complete your facility administrator setup",
+                  heading: `Welcome to ${name}!`,
+                  body: `<p>You have been invited as the administrator for <strong>${name}</strong>.</p><p>Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                  ctaText: "Complete Setup",
+                  ctaUrl: linkData.properties.action_link,
+                  footer: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
+                },
+              }),
+            });
+            
+            if (!emailResponse.ok) {
+              const errorText = await emailResponse.text();
+              console.error("Error sending email via Brevo:", errorText);
+            }
+          } catch (emailErr) {
+            console.error("Error calling email function:", emailErr);
+          }
+        }
       }
     } else {
-      console.error("Service client not available for sending invite");
+      // Fallback to signInWithOtp if service client not available
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: adminEmail,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: adminName || name + " Admin",
+            role: "agency_admin",
+            agency_id: facility.id,
+            needs_password_setup: true,
+          },
+        },
+      });
+
+      if (otpError) {
+        console.error("Error sending magic link:", otpError);
+      }
     }
 
     // Update facility with pending admin info
@@ -425,31 +477,70 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Send invite email using Admin API
+  // Generate magic link using Admin API and send via Brevo
   const origin = getSiteUrl();
   const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facilityId}`;
   
   const serviceClient = createServiceClient();
-  if (!serviceClient) {
-    return { error: "Service client not available" };
-  }
-  
-  const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-    adminEmail,
-    {
-      redirectTo: redirectUrl,
-      data: {
-        full_name: facility.name + " Admin",
-        role: "agency_admin",
-        agency_id: facilityId,
-        needs_password_setup: true,
+  if (serviceClient) {
+    // Use generateLink to create a magic link
+    const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+      type: "magiclink",
+      email: adminEmail,
+      options: {
+        redirectTo: redirectUrl,
+        data: {
+          full_name: facility.name + " Admin",
+          role: "agency_admin",
+          agency_id: facilityId,
+          needs_password_setup: true,
+        },
       },
-    }
-  );
+    });
 
-  if (inviteError) {
-    console.error("Error sending invite:", inviteError);
-    return { error: inviteError.message };
+    if (linkError) {
+      console.error("Error generating magic link:", linkError);
+      return { error: linkError.message };
+    } else if (linkData?.properties?.action_link) {
+      // Send the magic link via Brevo
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseAnonKey) {
+        try {
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              to: adminEmail,
+              subject: `Welcome to ${facility.name} - Complete Your Setup`,
+              template: {
+                preheader: "Click the link below to complete your facility administrator setup",
+                heading: `Welcome to ${facility.name}!`,
+                body: `<p>You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p>Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                ctaText: "Complete Setup",
+                ctaUrl: linkData.properties.action_link,
+                footer: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
+              },
+            }),
+          });
+          
+          if (!emailResponse.ok) {
+            const errorText = await emailResponse.text();
+            console.error("Error sending email via Brevo:", errorText);
+            return { error: "Failed to send invite email" };
+          }
+        } catch (emailErr) {
+          console.error("Error calling email function:", emailErr);
+          return { error: "Failed to send invite email" };
+        }
+      }
+    }
+  } else {
+    return { error: "Service client not available" };
   }
 
   // Update facility with pending admin email if not already set
