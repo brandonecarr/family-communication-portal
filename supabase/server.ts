@@ -14,6 +14,11 @@ export const createClient = async () => {
       auth: {
         getUser: async () => ({ data: { user: null }, error: new Error("No Supabase credentials") }),
         getSession: async () => ({ data: { session: null }, error: new Error("No Supabase credentials") }),
+        signInWithPassword: async () => ({ data: { user: null, session: null }, error: new Error("No Supabase credentials") }),
+        signUp: async () => ({ data: { user: null, session: null }, error: new Error("No Supabase credentials") }),
+        signOut: async () => ({ error: null }),
+        resetPasswordForEmail: async () => ({ data: null, error: new Error("No Supabase credentials") }),
+        updateUser: async () => ({ data: { user: null }, error: new Error("No Supabase credentials") }),
       },
       from: () => ({
         select: () => ({ data: null, error: new Error("No Supabase credentials"), single: () => ({ data: null, error: new Error("No Supabase credentials") }) }),

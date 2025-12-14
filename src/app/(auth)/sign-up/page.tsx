@@ -8,6 +8,8 @@ import { signUpAction } from "@/app/actions";
 import Navbar from "@/components/navbar";
 import { UrlProvider } from "@/components/url-provider";
 
+export const dynamic = "force-dynamic";
+
 export default async function Signup(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
