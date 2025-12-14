@@ -113,7 +113,7 @@ export default async function AdminDeliveriesPage() {
                           </p>
                         </div>
                         <Badge variant="outline" className={config}>
-                          {delivery.status.replace('_', ' ').toUpperCase()}
+                          {delivery.status?.replace('_', ' ').toUpperCase() || 'UNKNOWN'}
                         </Badge>
                       </div>
 
