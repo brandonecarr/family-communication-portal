@@ -554,7 +554,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
       const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
 
       return (staffUsers || []).map((su: any) => {
-        const userData = usersMap.get(su.user_id) || {};
+        const userData: any = usersMap.get(su.user_id) || {};
         return {
           id: su.user_id,
           full_name: userData.full_name || null,
