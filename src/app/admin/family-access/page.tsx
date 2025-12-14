@@ -36,7 +36,9 @@ import { inviteFamilyMemberAction } from "@/lib/actions/patients";
 import { Database } from "@/types/supabase";
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"];
-type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
+type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"] & {
+  patient?: { name: string } | null;
+};
 
 export const dynamic = "force-dynamic";
 
