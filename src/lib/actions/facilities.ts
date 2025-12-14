@@ -106,7 +106,12 @@ export async function createFacility(formData: FormData) {
     const origin = getSiteUrl();
     const redirectUrl = `${origin}/facility-setup?token=${token}&facility=${facility.id}`;
     
+    console.log("Attempting to send facility invite email to:", adminEmail);
+    console.log("Redirect URL:", redirectUrl);
+    
     const serviceClient = createServiceClient();
+    console.log("Service client available:", !!serviceClient);
+    
     if (serviceClient) {
       // Use generateLink to create a magic link
       const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
@@ -123,6 +128,8 @@ export async function createFacility(formData: FormData) {
         },
       });
 
+      console.log("Generate link result - error:", linkError, "has action_link:", !!linkData?.properties?.action_link);
+
       if (linkError) {
         console.error("Error generating magic link:", linkError);
       } else if (linkData?.properties?.action_link) {
@@ -130,9 +137,15 @@ export async function createFacility(formData: FormData) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         
+        console.log("Supabase URL available:", !!supabaseUrl);
+        console.log("Supabase Anon Key available:", !!supabaseAnonKey);
+        
         if (supabaseUrl && supabaseAnonKey) {
           try {
-            const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+            const emailEndpoint = `${supabaseUrl}/functions/v1/supabase-functions-send-email`;
+            console.log("Calling email endpoint:", emailEndpoint);
+            
+            const emailResponse = await fetch(emailEndpoint, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -154,16 +167,25 @@ export async function createFacility(formData: FormData) {
               }),
             });
             
+            console.log("Email response status:", emailResponse.status);
+            
             if (!emailResponse.ok) {
               const errorText = await emailResponse.text();
               console.error("Error sending email via Brevo:", errorText);
+            } else {
+              console.log("Email sent successfully!");
             }
           } catch (emailErr) {
             console.error("Error calling email function:", emailErr);
           }
+        } else {
+          console.error("Missing Supabase URL or Anon Key for email sending");
         }
+      } else {
+        console.error("No action_link in linkData:", linkData);
       }
     } else {
+      console.log("Service client not available, falling back to signInWithOtp");
       // Fallback to signInWithOtp if service client not available
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: adminEmail,
@@ -179,7 +201,9 @@ export async function createFacility(formData: FormData) {
       });
 
       if (otpError) {
-        console.error("Error sending magic link:", otpError);
+        console.error("Error sending magic link via OTP:", otpError);
+      } else {
+        console.log("Magic link sent via signInWithOtp");
       }
     }
 
