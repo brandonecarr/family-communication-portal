@@ -89,7 +89,7 @@ export default async function FamilyMembersPage() {
         )}
 
         <div className="space-y-4">
-          {familyMembers?.map((member) => (
+          {familyMembers?.map((member: any) => (
             <Card key={member.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
