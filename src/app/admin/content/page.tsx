@@ -15,6 +15,11 @@ import {
   Eye
 } from "lucide-react";
 import Link from "next/link";
+import { Database } from "@/types/supabase";
+
+type EducationModule = Database["public"]["Tables"]["education_modules"]["Row"];
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminContentPage() {
   const supabase = await createClient();
@@ -70,7 +75,7 @@ export default async function AdminContentPage() {
 
       {/* Modules List */}
       <div className="grid gap-4">
-        {modules?.map((module) => (
+        {modules?.map((module: EducationModule) => (
           <Card key={module.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
