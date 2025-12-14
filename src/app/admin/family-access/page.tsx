@@ -33,6 +33,11 @@ import {
 } from "@/components/ui/select";
 import Link from "next/link";
 import { inviteFamilyMemberAction } from "@/lib/actions/patients";
+import { Database } from "@/types/supabase";
+
+type Patient = Database["public"]["Tables"]["patients"]["Row"];
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminFamilyAccessPage({
   searchParams,
@@ -59,7 +64,7 @@ export default async function AdminFamilyAccessPage({
     .order("first_name");
 
   // Map patients to include full name
-  const patients = patientsRaw?.map((p) => ({
+  const patients = patientsRaw?.map((p: Patient) => ({
     id: p.id,
     name: `${p.first_name} ${p.last_name}`.trim(),
   }));
