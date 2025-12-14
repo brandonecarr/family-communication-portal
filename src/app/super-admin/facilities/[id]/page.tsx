@@ -77,7 +77,7 @@ export default async function FacilityDetailPage({
 
   // Fetch staff details from users table
   const staffWithDetails = await Promise.all(
-    (staffMembers || []).map(async (staff) => {
+    (staffMembers || []).map(async (staff: any) => {
       const { data: userDetails } = await supabase
         .from("users")
         .select("name, email, role")
