@@ -71,7 +71,7 @@ export async function sendNotification(notificationData: {
 }) {
   const preferences = await getNotificationPreferences();
   const typePreference = preferences?.find(
-    (p) => p.notification_type === notificationData.type
+    (p: any) => p.notification_type === notificationData.type
   );
   
   const channels = notificationData.channels || [];
