@@ -1,9 +1,18 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Users, Building2, Heart, Shield, Clock, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-export default function HomePage() {
+export default function HomePage({
+  searchParams,
+}: {
+  searchParams: { code?: string };
+}) {
+  // If there's an auth code, redirect to the callback handler
+  if (searchParams.code) {
+    redirect(`/auth/callback?code=${searchParams.code}`);
+  }
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <nav className="border-b bg-card/50 backdrop-blur-sm">
