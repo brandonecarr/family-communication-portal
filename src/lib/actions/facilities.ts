@@ -142,12 +142,14 @@ export async function createFacility(formData: FormData) {
                 to: adminEmail,
                 subject: `Welcome to ${name} - Complete Your Setup`,
                 template: {
+                  title: `Welcome to ${name}!`,
                   preheader: "Click the link below to complete your facility administrator setup",
-                  heading: `Welcome to ${name}!`,
-                  body: `<p>You have been invited as the administrator for <strong>${name}</strong>.</p><p>Click the button below to set up your account and complete the facility onboarding process.</p>`,
-                  ctaText: "Complete Setup",
-                  ctaUrl: linkData.properties.action_link,
-                  footer: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
+                  bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                  ctaButton: {
+                    text: "Complete Setup",
+                    url: linkData.properties.action_link,
+                  },
+                  footerText: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
                 },
               }),
             });
@@ -518,12 +520,14 @@ export async function resendFacilityInvite(facilityId: string) {
               to: adminEmail,
               subject: `Welcome to ${facility.name} - Complete Your Setup`,
               template: {
+                title: `Welcome to ${facility.name}!`,
                 preheader: "Click the link below to complete your facility administrator setup",
-                heading: `Welcome to ${facility.name}!`,
-                body: `<p>You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p>Click the button below to set up your account and complete the facility onboarding process.</p>`,
-                ctaText: "Complete Setup",
-                ctaUrl: linkData.properties.action_link,
-                footer: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
+                bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                ctaButton: {
+                  text: "Complete Setup",
+                  url: linkData.properties.action_link,
+                },
+                footerText: "This link will expire in 24 hours. If you didn't request this, please ignore this email.",
               },
             }),
           });
