@@ -133,7 +133,7 @@ export default async function AdminSuppliesPage() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {new Date(request.created_at).toLocaleString()}
+                        {request.created_at ? new Date(request.created_at).toLocaleString() : 'N/A'}
                       </span>
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
