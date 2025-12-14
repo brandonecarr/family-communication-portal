@@ -92,6 +92,16 @@ export default async function SuperAdminFacilitiesPage({
   };
 
   const tierColors: Record<string, string> = {
+    "1-25": "bg-gray-100 text-gray-600",
+    "26-50": "bg-[#B8A9D4]/20 text-[#B8A9D4]",
+    "51-75": "bg-[#B8A9D4]/30 text-[#9A8BC4]",
+    "76-100": "bg-amber-100 text-amber-600",
+    "101-125": "bg-amber-200 text-amber-700",
+    "126-150": "bg-[#7A9B8E]/20 text-[#7A9B8E]",
+    "151-175": "bg-[#7A9B8E]/30 text-[#6A8B7E]",
+    "176-200": "bg-[#7A9B8E]/40 text-[#5A7B6E]",
+    "201+": "bg-[#D4876F]/20 text-[#D4876F]",
+    // Legacy tiers for backwards compatibility
     basic: "bg-gray-100 text-gray-600",
     standard: "bg-[#B8A9D4]/20 text-[#B8A9D4]",
     premium: "bg-amber-100 text-amber-600",

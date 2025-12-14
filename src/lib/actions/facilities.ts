@@ -48,9 +48,8 @@ export async function createFacility(formData: FormData) {
   const city = formData.get("city") as string;
   const state = formData.get("state") as string;
   const zip_code = formData.get("zip_code") as string;
-  const subscription_tier = formData.get("subscription_tier") as string || "standard";
-  const max_patients = parseInt(formData.get("max_patients") as string) || 100;
-  const max_staff = parseInt(formData.get("max_staff") as string) || 50;
+  const subscription_tier = formData.get("subscription_tier") as string || "1-25";
+  const max_patients = parseInt(formData.get("max_patients") as string) || 25;
 
   // Create the facility first
   const { data: facility, error: facilityError } = await supabase
@@ -65,7 +64,6 @@ export async function createFacility(formData: FormData) {
       zip_code,
       subscription_tier,
       max_patients,
-      max_staff,
       status: "active",
       onboarding_completed: false,
     })
@@ -148,8 +146,7 @@ export async function updateFacility(id: string, formData: FormData) {
   const zip_code = formData.get("zip_code") as string;
   const status = formData.get("status") as string;
   const subscription_tier = formData.get("subscription_tier") as string;
-  const max_patients = parseInt(formData.get("max_patients") as string) || 100;
-  const max_staff = parseInt(formData.get("max_staff") as string) || 50;
+  const max_patients = parseInt(formData.get("max_patients") as string) || 25;
 
   const { data, error } = await supabase
     .from("agencies")
@@ -164,7 +161,6 @@ export async function updateFacility(id: string, formData: FormData) {
       status,
       subscription_tier,
       max_patients,
-      max_staff,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)

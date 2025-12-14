@@ -11,7 +11,7 @@ export default async function Dashboard() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return redirect("/sign-in");
+    redirect("/sign-in");
   }
 
   // Check user role from user metadata or users table
@@ -25,13 +25,16 @@ export default async function Dashboard() {
 
   // Route based on role
   if (role === "super_admin") {
-    return redirect("/super-admin");
+    redirect("/super-admin");
   } else if (role === "agency_admin" || role === "agency_staff" || role === "admin") {
-    return redirect("/admin");
+    redirect("/admin");
   } else if (role === "family_admin" || role === "family_member") {
-    return redirect("/family");
+    redirect("/family");
+  } else {
+    // If no role is set, redirect to onboarding
+    redirect("/onboarding");
   }
 
-  // If no role is set, redirect to onboarding
-  return redirect("/onboarding");
+  // This should never be reached, but satisfies TypeScript
+  return null;
 }

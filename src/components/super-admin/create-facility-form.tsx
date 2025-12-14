@@ -196,40 +196,35 @@ export function CreateFacilityForm() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subscription_tier">Subscription Tier</Label>
-              <Select name="subscription_tier" defaultValue="standard">
+              <Label htmlFor="subscription_tier">Patient Tier (Pricing)</Label>
+              <Select name="subscription_tier" defaultValue="1-25">
                 <SelectTrigger className="bg-[#FAF8F5] border-[#E8E4DF]">
-                  <SelectValue placeholder="Select tier" />
+                  <SelectValue placeholder="Select patient tier" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="premium">Premium</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                  <SelectItem value="1-25">1-25 patients - $250/month</SelectItem>
+                  <SelectItem value="26-50">26-50 patients - $500/month</SelectItem>
+                  <SelectItem value="51-75">51-75 patients - $750/month</SelectItem>
+                  <SelectItem value="76-100">76-100 patients - $1,000/month</SelectItem>
+                  <SelectItem value="101-125">101-125 patients - $1,250/month</SelectItem>
+                  <SelectItem value="126-150">126-150 patients - $1,500/month</SelectItem>
+                  <SelectItem value="151-175">151-175 patients - $1,750/month</SelectItem>
+                  <SelectItem value="176-200">176-200 patients - $2,000/month</SelectItem>
+                  <SelectItem value="201+">201+ patients - Custom pricing</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Unlimited staff included in all tiers</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="max_patients">Max Patients</Label>
-                <Input 
-                  id="max_patients" 
-                  name="max_patients" 
-                  type="number"
-                  defaultValue="100"
-                  className="bg-[#FAF8F5] border-[#E8E4DF]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="max_staff">Max Staff</Label>
-                <Input 
-                  id="max_staff" 
-                  name="max_staff" 
-                  type="number"
-                  defaultValue="50"
-                  className="bg-[#FAF8F5] border-[#E8E4DF]"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_patients">Max Patients</Label>
+              <Input 
+                id="max_patients" 
+                name="max_patients" 
+                type="number"
+                defaultValue="25"
+                className="bg-[#FAF8F5] border-[#E8E4DF]"
+              />
+              <p className="text-xs text-muted-foreground">Should match the selected tier</p>
             </div>
           </div>
           <div className="flex justify-end gap-3">

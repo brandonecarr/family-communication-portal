@@ -40,6 +40,26 @@ import { EditFacilityForm } from "@/components/super-admin/edit-facility-form";
 import { AddStaffForm } from "@/components/super-admin/add-staff-form";
 import { ResendInviteButton } from "@/components/super-admin/resend-invite-button";
 
+function getPricingForTier(tier: string): string {
+  const pricing: Record<string, string> = {
+    "1-25": "$250/month",
+    "26-50": "$500/month",
+    "51-75": "$750/month",
+    "76-100": "$1,000/month",
+    "101-125": "$1,250/month",
+    "126-150": "$1,500/month",
+    "151-175": "$1,750/month",
+    "176-200": "$2,000/month",
+    "201+": "Custom pricing",
+    // Legacy tiers
+    basic: "$250/month",
+    standard: "$500/month",
+    premium: "$1,000/month",
+    enterprise: "Custom pricing",
+  };
+  return pricing[tier] || "$250/month";
+}
+
 export default async function FacilityDetailPage({
   params,
   searchParams,
@@ -324,16 +344,20 @@ export default async function FacilityDetailPage({
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">Subscription Tier</p>
+                      <p className="text-sm text-muted-foreground">Patient Tier</p>
                       <Badge variant="secondary" className="bg-[#B8A9D4]/20 text-[#B8A9D4] mt-1">
-                        {facility.subscription_tier || "standard"}
+                        {facility.subscription_tier || "1-25"} patients
                       </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {getPricingForTier(facility.subscription_tier || "1-25")}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Limits</p>
+                      <p className="text-sm text-muted-foreground">Patient Limit</p>
                       <p className="font-medium">
-                        {facility.max_patients || 100} patients / {facility.max_staff || 50} staff
+                        {facility.max_patients || 25} patients
                       </p>
+                      <p className="text-xs text-muted-foreground">Unlimited staff</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Created</p>
