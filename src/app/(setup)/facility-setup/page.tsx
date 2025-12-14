@@ -62,32 +62,41 @@ function AdminSetupContent() {
 
   const supabase = createClient();
 
-  // Handle auth code/token verification if present
+  // Handle auth from hash fragment (Supabase inviteUserByEmail uses implicit flow)
   useEffect(() => {
-    const verifyToken = async () => {
-      if (authCode && !authProcessed) {
-        setAuthProcessed(true);
-        try {
-          // The code from generateLink is an OTP token, use verifyOtp
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: authCode,
-            type: "invite",
-          });
-          if (error) {
-            console.error("Error verifying token:", error);
+    const handleHashAuth = async () => {
+      // Check if there's a hash fragment with access_token
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          setAuthProcessed(true);
+          try {
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (error) {
+              console.error("Error setting session:", error);
+            } else {
+              // Clear the hash from URL
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+          } catch (err) {
+            console.error("Error setting session:", err);
           }
-        } catch (err) {
-          console.error("Error verifying token:", err);
         }
       }
     };
-    verifyToken();
-  }, [authCode, authProcessed, supabase.auth]);
+    handleHashAuth();
+  }, [supabase.auth]);
 
   useEffect(() => {
     const loadData = async () => {
-      // Wait for auth code exchange to complete
-      if (authCode && !authProcessed) {
+      // Wait for hash auth to complete
+      if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token') && !authProcessed) {
         return;
       }
       
