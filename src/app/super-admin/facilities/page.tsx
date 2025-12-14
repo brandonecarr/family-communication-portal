@@ -65,7 +65,7 @@ export default async function SuperAdminFacilitiesPage({
 
   // Get stats for each facility
   const facilitiesWithStats = await Promise.all(
-    (filteredFacilities || []).map(async (facility) => {
+    (filteredFacilities || []).map(async (facility: any) => {
       const [patientsResult, staffResult] = await Promise.all([
         supabase
           .from("patients")
