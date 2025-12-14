@@ -102,28 +102,73 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
-    // The redirect goes to /auth/callback which then redirects to /facility-setup
+    // Use generateLink to get a PKCE code-based link, then send email via Brevo
     const origin = getSiteUrl();
-    const redirectUrl = `${origin}/auth/callback?token=${token}&facility=${facility.id}`;
     
     const serviceClient = createServiceClient();
     if (serviceClient) {
-      const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-        adminEmail,
-        {
+      const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+        type: "invite",
+        email: adminEmail,
+        options: {
           data: {
             full_name: adminName || name + " Admin",
             role: "agency_admin",
             agency_id: facility.id,
             needs_password_setup: true,
           },
-          redirectTo: redirectUrl,
-        }
-      );
+        },
+      });
 
-      if (inviteError) {
-        console.error("Error inviting user:", inviteError);
+      if (linkError) {
+        console.error("Error generating invite link:", linkError);
+      } else if (linkData?.properties?.action_link) {
+        // Extract the token_hash from the action_link
+        // action_link format: https://xxx.supabase.co/auth/v1/verify?token=TOKEN_HASH&type=invite&redirect_to=...
+        const actionUrl = new URL(linkData.properties.action_link);
+        const tokenHash = actionUrl.searchParams.get("token");
+        
+        if (tokenHash) {
+          // Build the proper link format: /facility-setup?code=xxx&facility=xxx&token=xxx
+          const setupUrl = `${origin}/facility-setup?code=${tokenHash}&facility=${facility.id}&token=${token}`;
+          
+          // Send email via Brevo
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          
+          if (supabaseUrl && supabaseAnonKey) {
+            try {
+              const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseAnonKey}`,
+                },
+                body: JSON.stringify({
+                  to: adminEmail,
+                  subject: `Welcome to ${name} - Complete Your Setup`,
+                  template: {
+                    title: `Welcome to ${name}!`,
+                    preheader: "Click the link below to complete your facility administrator setup",
+                    bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                    ctaButton: {
+                      text: "Complete Setup",
+                      url: setupUrl,
+                    },
+                    footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
+                  },
+                }),
+              });
+              
+              if (!emailResponse.ok) {
+                const errorText = await emailResponse.text();
+                console.error("Error sending email via Brevo:", errorText);
+              }
+            } catch (emailErr) {
+              console.error("Error calling email function:", emailErr);
+            }
+          }
+        }
       }
     } else {
       console.error("Service client not available for sending invite");
@@ -425,29 +470,76 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Use Supabase Admin API to invite user - this creates the auth user AND sends email with auth code
-  // The redirect goes to /auth/callback which then redirects to /facility-setup
+  // Use generateLink to get a PKCE code-based link, then send email via Brevo
   const origin = getSiteUrl();
-  const redirectUrl = `${origin}/auth/callback?token=${token}&facility=${facilityId}`;
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
-    const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-      adminEmail,
-      {
+    const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+      type: "invite",
+      email: adminEmail,
+      options: {
         data: {
           full_name: facility.name + " Admin",
           role: "agency_admin",
           agency_id: facilityId,
           needs_password_setup: true,
         },
-        redirectTo: redirectUrl,
-      }
-    );
+      },
+    });
 
-    if (inviteError) {
-      console.error("Error inviting user:", inviteError);
-      return { error: inviteError.message };
+    if (linkError) {
+      console.error("Error generating invite link:", linkError);
+      return { error: linkError.message };
+    } else if (linkData?.properties?.action_link) {
+      // Extract the token_hash from the action_link
+      // action_link format: https://xxx.supabase.co/auth/v1/verify?token=TOKEN_HASH&type=invite&redirect_to=...
+      const actionUrl = new URL(linkData.properties.action_link);
+      const tokenHash = actionUrl.searchParams.get("token");
+      
+      if (tokenHash) {
+        // Build the proper link format: /facility-setup?code=xxx&facility=xxx&token=xxx
+        const setupUrl = `${origin}/facility-setup?code=${tokenHash}&facility=${facilityId}&token=${token}`;
+        
+        // Send email via Brevo
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseAnonKey) {
+          try {
+            const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseAnonKey}`,
+              },
+              body: JSON.stringify({
+                to: adminEmail,
+                subject: `Welcome to ${facility.name} - Complete Your Setup`,
+                template: {
+                  title: `Welcome to ${facility.name}!`,
+                  preheader: "Click the link below to complete your facility administrator setup",
+                  bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                  ctaButton: {
+                    text: "Complete Setup",
+                    url: setupUrl,
+                  },
+                  footerText: "This link will expire in 7 days. If you didn't request this, please ignore this email.",
+                },
+              }),
+            });
+            
+            if (!emailResponse.ok) {
+              const errorText = await emailResponse.text();
+              console.error("Error sending email via Brevo:", errorText);
+              return { error: "Failed to send invite email" };
+            }
+          } catch (emailErr) {
+            console.error("Error calling email function:", emailErr);
+            return { error: "Failed to send invite email" };
+          }
+        }
+      }
     }
   } else {
     return { error: "Service client not available" };

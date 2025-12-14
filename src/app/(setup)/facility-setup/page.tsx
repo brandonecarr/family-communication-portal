@@ -62,19 +62,26 @@ function AdminSetupContent() {
 
   const supabase = createClient();
 
-  // Handle auth code exchange if present
+  // Handle auth code/token verification if present
   useEffect(() => {
-    const exchangeCode = async () => {
+    const verifyToken = async () => {
       if (authCode && !authProcessed) {
         setAuthProcessed(true);
         try {
-          await supabase.auth.exchangeCodeForSession(authCode);
+          // The code from generateLink is an OTP token, use verifyOtp
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: authCode,
+            type: "invite",
+          });
+          if (error) {
+            console.error("Error verifying token:", error);
+          }
         } catch (err) {
-          console.error("Error exchanging code:", err);
+          console.error("Error verifying token:", err);
         }
       }
     };
-    exchangeCode();
+    verifyToken();
   }, [authCode, authProcessed, supabase.auth]);
 
   useEffect(() => {
