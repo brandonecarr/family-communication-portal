@@ -604,6 +604,82 @@ export type Database = {
           },
         ]
       }
+      message_read_receipts: {
+        Row: {
+          id: string
+          message_id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_read_receipts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "thread_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_threads: {
+        Row: {
+          agency_id: string
+          archived_at: string | null
+          category: Database["public"]["Enums"]["message_category"]
+          created_at: string | null
+          created_by: string
+          id: string
+          is_group: boolean | null
+          last_message_at: string | null
+          subject: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agency_id: string
+          archived_at?: string | null
+          category?: Database["public"]["Enums"]["message_category"]
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_group?: boolean | null
+          last_message_at?: string | null
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agency_id?: string
+          archived_at?: string | null
+          category?: Database["public"]["Enums"]["message_category"]
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          is_group?: boolean | null
+          last_message_at?: string | null
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_threads_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           assigned_to: string | null
@@ -898,6 +974,79 @@ export type Database = {
           },
         ]
       }
+      thread_messages: {
+        Row: {
+          attachments: Json | null
+          body: string
+          created_at: string | null
+          edited_at: string | null
+          id: string
+          sender_id: string
+          thread_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          body: string
+          created_at?: string | null
+          edited_at?: string | null
+          id?: string
+          sender_id: string
+          thread_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          body?: string
+          created_at?: string | null
+          edited_at?: string | null
+          id?: string
+          sender_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_participants: {
+        Row: {
+          id: string
+          is_admin: boolean | null
+          joined_at: string | null
+          last_read_at: string | null
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_admin?: boolean | null
+          joined_at?: string | null
+          last_read_at?: string | null
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_admin?: boolean | null
+          joined_at?: string | null
+          last_read_at?: string | null
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_participants_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -1083,6 +1232,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      archive_old_threads: { Args: never; Returns: undefined }
       get_user_agency_id: { Args: never; Returns: string }
       is_agency_admin: { Args: { check_agency_id: string }; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
@@ -1095,6 +1245,7 @@ export type Database = {
         | "out_for_delivery"
         | "delivered"
         | "exception"
+      message_category: "internal" | "family"
       message_priority: "low" | "normal" | "high" | "urgent"
       message_status: "sent" | "delivered" | "read"
       patient_status: "active" | "discharged" | "deceased"
@@ -1247,6 +1398,7 @@ export const Constants = {
         "delivered",
         "exception",
       ],
+      message_category: ["internal", "family"],
       message_priority: ["low", "normal", "high", "urgent"],
       message_status: ["sent", "delivered", "read"],
       patient_status: ["active", "discharged", "deceased"],

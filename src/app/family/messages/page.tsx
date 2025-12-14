@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient } from "../../../../supabase/server";
-import MessageThread from "@/components/family/message-thread";
-import MessageList from "@/components/family/message-list";
+import FamilyMessagesClient from "./messages-client";
 
 export default async function MessagesPage() {
   const supabase = await createClient();
@@ -23,13 +23,11 @@ export default async function MessagesPage() {
   const patientId = familyMember?.patient_id;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
-      <div className="lg:col-span-1">
-        <MessageList />
-      </div>
-      <div className="lg:col-span-2">
-        <MessageThread patientId={patientId} currentUserId={user.id} />
-      </div>
-    </div>
+    <Suspense fallback={<div className="flex items-center justify-center h-[calc(100vh-180px)]">Loading...</div>}>
+      <FamilyMessagesClient 
+        currentUserId={user.id}
+        patientId={patientId}
+      />
+    </Suspense>
   );
 }
