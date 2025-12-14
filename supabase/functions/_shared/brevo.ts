@@ -40,6 +40,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         subject: params.subject,
         htmlContent: params.htmlContent,
         ...(params.replyTo && { replyTo: { email: params.replyTo } }),
+        headers: {
+          "X-Mailin-Track": "0",
+          "X-Mailin-Track-Links": "0",
+          "X-Mailin-Track-Opens": "0"
+        }
       }),
     });
 
