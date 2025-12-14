@@ -194,6 +194,8 @@ export default function PatientList() {
         address: "",
         status: "active",
         admission_date: new Date(),
+        date_of_death: null,
+        discharge_date: null,
       });
       fetchPatients();
     } catch (error: any) {
