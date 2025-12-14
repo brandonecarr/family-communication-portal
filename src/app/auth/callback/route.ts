@@ -12,27 +12,32 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    // Check if user needs to complete facility setup
     if (user && !error) {
       const needsPasswordSetup = user.user_metadata?.needs_password_setup;
       const agencyId = user.user_metadata?.agency_id || facility;
+      const userEmail = user.email;
       
-      // If user came from a facility invite, redirect to facility-setup
+      // Check if there's a pending facility invite for this user
+      const { data: pendingInvite } = await supabase
+        .from("facility_invites")
+        .select("token, agency_id")
+        .eq("email", userEmail)
+        .eq("status", "pending")
+        .single();
+      
+      // If user has pending invite OR needs password setup, redirect to facility-setup
+      if (pendingInvite) {
+        const setupUrl = new URL("/facility-setup", requestUrl.origin);
+        setupUrl.searchParams.set("facility", pendingInvite.agency_id);
+        setupUrl.searchParams.set("token", pendingInvite.token);
+        return NextResponse.redirect(setupUrl);
+      }
+      
+      // Fallback: check metadata
       if (needsPasswordSetup && agencyId) {
-        // Check if there's a pending invite token
-        const { data: invite } = await supabase
-          .from("facility_invites")
-          .select("token")
-          .eq("email", user.email)
-          .eq("agency_id", agencyId)
-          .eq("status", "pending")
-          .single();
-        
         const setupUrl = new URL("/facility-setup", requestUrl.origin);
         setupUrl.searchParams.set("facility", agencyId);
-        if (invite?.token) {
-          setupUrl.searchParams.set("token", invite.token);
-        } else if (token) {
+        if (token) {
           setupUrl.searchParams.set("token", token);
         }
         return NextResponse.redirect(setupUrl);
