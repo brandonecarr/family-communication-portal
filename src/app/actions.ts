@@ -1,6 +1,7 @@
 "use server";
 
 import { encodedRedirect } from "@/utils/utils";
+import { getSiteUrl } from "@/lib/utils";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "../../supabase/server";
@@ -11,7 +12,7 @@ export const signUpAction = async (formData: FormData) => {
   const fullName = formData.get("full_name")?.toString() || '';
   const adminCode = formData.get("admin_code")?.toString();
   const supabase = await createClient();
-  const origin = headers().get("origin");
+  const origin = getSiteUrl() || headers().get("origin");
 
   if (!email || !password) {
     return encodedRedirect(
