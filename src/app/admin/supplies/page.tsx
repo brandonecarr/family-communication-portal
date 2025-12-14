@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { Database } from "@/types/supabase";
 
-type SupplyRequest = Database["public"]["Tables"]["supply_requests"]["Row"];
+type SupplyRequest = Database["public"]["Tables"]["supply_requests"]["Row"] & {
+  patient?: { name: string } | null;
+};
 
 export const dynamic = "force-dynamic";
 
