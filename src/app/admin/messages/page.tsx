@@ -2,6 +2,16 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "../../../../supabase/server";
 import AdminMessagesClient from "./messages-client";
+import { Database } from "@/types/supabase";
+
+type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"] & {
+  patient?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    agency_id: string | null;
+  } | null;
+};
 
 export default async function AdminMessagesPage({
   searchParams,
@@ -56,12 +66,12 @@ export default async function AdminMessagesPage({
 
   // Filter out family members without valid patient data and filter by agency
   // Also normalize the patient field from array to single object
-  const validFamilyMembers = familyMembers?.filter(fm => {
+  const validFamilyMembers = familyMembers?.filter((fm: FamilyMember) => {
     if (!fm.patient) return false;
     const patient = Array.isArray(fm.patient) ? fm.patient[0] : fm.patient;
     if (agencyId && patient?.agency_id !== agencyId) return false;
     return true;
-  }).map(fm => ({
+  }).map((fm: FamilyMember) => ({
     ...fm,
     patient: Array.isArray(fm.patient) ? fm.patient[0] : fm.patient
   })) || [];
