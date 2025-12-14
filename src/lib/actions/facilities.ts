@@ -102,16 +102,15 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Use signInWithOtp to send a magic link - this uses PKCE and redirects with ?code= format
+    // Use generateLink to get the OTP token, then construct our own URL
     const origin = getSiteUrl();
-    const redirectUrl = `${origin}/facility-setup?facility=${facility.id}&token=${token}`;
     
     const serviceClient = createServiceClient();
     if (serviceClient) {
       // First create the user with admin API
-      const { data: userData, error: createError } = await serviceClient.auth.admin.createUser({
+      const { error: createError } = await serviceClient.auth.admin.createUser({
         email: adminEmail,
-        email_confirm: true, // Mark as confirmed so magic link works
+        email_confirm: false, // Don't confirm yet - they need to click the link
         user_metadata: {
           full_name: adminName || name + " Admin",
           role: "agency_admin",
@@ -124,17 +123,64 @@ export async function createFacility(formData: FormData) {
         console.error("Error creating user:", createError);
       }
       
-      // Now send a magic link to the user - this will use PKCE flow
-      const { error: otpError } = await serviceClient.auth.signInWithOtp({
+      // Generate an invite link to get the OTP token
+      const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+        type: "invite",
         email: adminEmail,
         options: {
-          shouldCreateUser: false, // User already created above
-          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: adminName || name + " Admin",
+            role: "agency_admin",
+            agency_id: facility.id,
+            needs_password_setup: true,
+          },
         },
       });
 
-      if (otpError) {
-        console.error("Error sending magic link:", otpError);
+      if (linkError) {
+        console.error("Error generating link:", linkError);
+      } else if (linkData?.properties?.hashed_token) {
+        // Build our custom URL with the hashed_token as the code
+        const setupUrl = `${origin}/facility-setup?code=${linkData.properties.hashed_token}&facility=${facility.id}&token=${token}`;
+        
+        console.log("=== FACILITY INVITE ===");
+        console.log("Setup URL:", setupUrl);
+        console.log("=======================");
+        
+        // Send email via Supabase edge function (not Brevo)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseAnonKey) {
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseAnonKey}`,
+              },
+              body: JSON.stringify({
+                to: adminEmail,
+                subject: `Welcome to ${name} - Complete Your Setup`,
+                htmlContent: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #2D2D2D;">Welcome to ${name}!</h1>
+                    <p style="color: #2D2D2D; font-size: 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p>
+                    <p style="color: #2D2D2D; font-size: 16px;">Click the link below to set up your account:</p>
+                    <p style="margin: 24px 0;">
+                      <a href="${setupUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Complete Setup</a>
+                    </p>
+                    <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                    <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${setupUrl}</p>
+                    <p style="color: #999; font-size: 12px; margin-top: 32px;">This link will expire in 7 days.</p>
+                  </div>
+                `,
+              }),
+            });
+          } catch (emailErr) {
+            console.error("Error sending email:", emailErr);
+          }
+        }
       }
     } else {
       console.error("Service client not available for sending invite");
@@ -436,25 +482,77 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Use signInWithOtp to send a magic link - this uses PKCE and redirects with ?code= format
+  // Use generateLink to get the OTP token, then construct our own URL
   const origin = getSiteUrl();
-  const redirectUrl = `${origin}/facility-setup?facility=${facilityId}&token=${token}`;
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
-    // Just send the magic link - the user was already created when the facility was first created
-    // signInWithOtp with shouldCreateUser: false will work for existing users
-    const { error: otpError } = await serviceClient.auth.signInWithOtp({
+    // Generate an invite link to get the OTP token
+    const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+      type: "invite",
       email: adminEmail,
       options: {
-        shouldCreateUser: false,
-        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: facility.name + " Admin",
+          role: "agency_admin",
+          agency_id: facilityId,
+          needs_password_setup: true,
+        },
       },
     });
 
-    if (otpError) {
-      console.error("Error sending magic link:", otpError);
-      return { error: otpError.message };
+    if (linkError) {
+      console.error("Error generating link:", linkError);
+      return { error: linkError.message };
+    } else if (linkData?.properties?.hashed_token) {
+      // Build our custom URL with the hashed_token as the code
+      const setupUrl = `${origin}/facility-setup?code=${linkData.properties.hashed_token}&facility=${facilityId}&token=${token}`;
+      
+      console.log("=== RESEND FACILITY INVITE ===");
+      console.log("Setup URL:", setupUrl);
+      console.log("==============================");
+      
+      // Send email via Supabase edge function
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseAnonKey) {
+        try {
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              to: adminEmail,
+              subject: `Welcome to ${facility.name} - Complete Your Setup`,
+              htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #2D2D2D;">Welcome to ${facility.name}!</h1>
+                  <p style="color: #2D2D2D; font-size: 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p>
+                  <p style="color: #2D2D2D; font-size: 16px;">Click the link below to set up your account:</p>
+                  <p style="margin: 24px 0;">
+                    <a href="${setupUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Complete Setup</a>
+                  </p>
+                  <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                  <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${setupUrl}</p>
+                  <p style="color: #999; font-size: 12px; margin-top: 32px;">This link will expire in 7 days.</p>
+                </div>
+              `,
+            }),
+          });
+          
+          if (!emailResponse.ok) {
+            const errorText = await emailResponse.text();
+            console.error("Error sending email:", errorText);
+            return { error: "Failed to send invite email" };
+          }
+        } catch (emailErr) {
+          console.error("Error sending email:", emailErr);
+          return { error: "Failed to send invite email" };
+        }
+      }
     }
   } else {
     return { error: "Service client not available" };

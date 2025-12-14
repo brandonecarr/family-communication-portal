@@ -5,7 +5,8 @@ import { sendEmail } from "@shared/brevo.ts";
 interface SendEmailRequest {
   to: string;
   subject: string;
-  template: EmailTemplateOptions;
+  template?: EmailTemplateOptions;
+  htmlContent?: string;
   replyTo?: string;
 }
 
@@ -18,11 +19,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { to, subject, template, replyTo } = await req.json() as SendEmailRequest;
+    const { to, subject, template, htmlContent, replyTo } = await req.json() as SendEmailRequest;
 
-    if (!to || !subject || !template) {
+    if (!to || !subject || (!template && !htmlContent)) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, subject, template' }),
+        JSON.stringify({ error: 'Missing required fields: to, subject, and either template or htmlContent' }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -30,7 +31,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const emailHtml = generateEmailHtml(template);
+    // Use raw htmlContent if provided, otherwise generate from template
+    const emailHtml = htmlContent || generateEmailHtml(template!);
 
     const result = await sendEmail({
       to,

@@ -64,20 +64,24 @@ function AdminSetupContent() {
 
   // Handle auth code exchange (PKCE flow from magic link)
   useEffect(() => {
-    const exchangeCode = async () => {
+    const verifyToken = async () => {
       if (authCode && !authProcessed) {
         setAuthProcessed(true);
         try {
-          const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+          // The code is a hashed_token from generateLink - use verifyOtp
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: authCode,
+            type: "invite",
+          });
           if (error) {
-            console.error("Error exchanging code for session:", error);
+            console.error("Error verifying token:", error);
           }
         } catch (err) {
-          console.error("Error exchanging code:", err);
+          console.error("Error verifying token:", err);
         }
       }
     };
-    exchangeCode();
+    verifyToken();
   }, [authCode, authProcessed, supabase.auth]);
 
   useEffect(() => {
