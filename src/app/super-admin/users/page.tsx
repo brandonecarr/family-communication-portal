@@ -57,7 +57,7 @@ export default async function SuperAdminUsersPage({
   const { data: users } = await query;
 
   // Filter by search
-  const filteredUsers = users?.filter(u => 
+  const filteredUsers = users?.filter((u: any) => 
     !searchQuery || 
     u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -65,7 +65,7 @@ export default async function SuperAdminUsersPage({
 
   // Get agency assignments for each user
   const usersWithAgencies = await Promise.all(
-    (filteredUsers || []).map(async (user) => {
+    (filteredUsers || []).map(async (user: any) => {
       const { data: agencyUsers } = await supabase
         .from("agency_users")
         .select(`
@@ -115,10 +115,10 @@ export default async function SuperAdminUsersPage({
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {[
           { label: "Total Users", count: users?.length || 0, color: "bg-[#7A9B8E]" },
-          { label: "Super Admins", count: users?.filter(u => u.role === "super_admin").length || 0, color: "bg-amber-500" },
-          { label: "Agency Admins", count: users?.filter(u => u.role === "agency_admin").length || 0, color: "bg-[#7A9B8E]" },
-          { label: "Agency Staff", count: users?.filter(u => u.role === "agency_staff").length || 0, color: "bg-[#B8A9D4]" },
-          { label: "Family Members", count: users?.filter(u => u.role === "family_member" || u.role === "family_admin").length || 0, color: "bg-[#D4876F]" },
+          { label: "Super Admins", count: users?.filter((u: any) => u.role === "super_admin").length || 0, color: "bg-amber-500" },
+          { label: "Agency Admins", count: users?.filter((u: any) => u.role === "agency_admin").length || 0, color: "bg-[#7A9B8E]" },
+          { label: "Agency Staff", count: users?.filter((u: any) => u.role === "agency_staff").length || 0, color: "bg-[#B8A9D4]" },
+          { label: "Family Members", count: users?.filter((u: any) => u.role === "family_member" || u.role === "family_admin").length || 0, color: "bg-[#D4876F]" },
         ].map((stat) => (
           <Card key={stat.label} className="soft-shadow border-0 bg-white">
             <CardContent className="p-4">
@@ -183,7 +183,7 @@ export default async function SuperAdminUsersPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {usersWithAgencies.map((user) => (
+                {usersWithAgencies.map((user: any) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">

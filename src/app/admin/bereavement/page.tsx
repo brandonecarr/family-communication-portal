@@ -96,7 +96,7 @@ export default async function AdminBereavementPage() {
 
       {/* Campaigns List */}
       <div className="grid gap-4">
-        {campaigns?.map((campaign) => {
+        {campaigns?.map((campaign: any) => {
           const config =
             statusColors[campaign.status as keyof typeof statusColors] ||
             statusColors.draft;

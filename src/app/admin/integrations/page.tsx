@@ -128,7 +128,7 @@ export default async function AdminIntegrationsPage() {
       <div>
         <h2 className="text-xl font-semibold mb-4">Connected Integrations</h2>
         <div className="grid gap-4">
-          {integrations?.map((integration) => {
+          {integrations?.map((integration: any) => {
             const config =
               statusColors[
                 integration.status as keyof typeof statusColors

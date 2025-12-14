@@ -161,7 +161,7 @@ export default async function SuperAdminFacilitiesPage({
       {/* Facilities Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {facilitiesWithStats && facilitiesWithStats.length > 0 ? (
-          facilitiesWithStats.map((facility) => (
+          facilitiesWithStats.map((facility: any) => (
             <Card 
               key={facility.id} 
               className="soft-shadow border-0 bg-white hover:shadow-lg transition-all duration-300 group"

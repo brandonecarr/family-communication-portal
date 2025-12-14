@@ -133,7 +133,7 @@ export default async function SuperAdminDashboard() {
         <CardContent>
           <div className="space-y-4">
             {recentFacilities && recentFacilities.length > 0 ? (
-              recentFacilities.map((facility) => (
+              recentFacilities.map((facility: any) => (
                 <Link 
                   key={facility.id} 
                   href={`/super-admin/facilities/${facility.id}`}

@@ -175,7 +175,7 @@ export default async function PatientDetailsPage({
                 <p className="text-muted-foreground text-center py-8">All upcoming visits will be listed here.</p>
               ) : (
                 <div className="space-y-3">
-                  {visits.map((visit) => (
+                  {visits.map((visit: any) => (
                     <Card key={visit.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -244,7 +244,7 @@ export default async function PatientDetailsPage({
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {familyMembers.map((member) => (
+                  {familyMembers.map((member: any) => (
                     <FamilyMemberCard
                       key={member.id}
                       member={member}
@@ -269,7 +269,7 @@ export default async function PatientDetailsPage({
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {deliveries.map((delivery) => (
+                  {deliveries.map((delivery: any) => (
                     <div
                       key={delivery.id}
                       className="flex items-center justify-between p-4 border rounded-lg"
@@ -307,7 +307,7 @@ export default async function PatientDetailsPage({
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {messages.map((message) => {
+                  {messages.map((message: any) => {
                     const isStaff = message.sender_type === "staff";
                     return (
                       <div 

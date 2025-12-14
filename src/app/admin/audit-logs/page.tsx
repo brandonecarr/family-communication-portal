@@ -111,7 +111,7 @@ export default async function AdminAuditLogsPage() {
 
       {/* Logs List */}
       <div className="grid gap-3">
-        {logs?.map((log) => {
+        {logs?.map((log: any) => {
           const config =
             actionColors[log.action as keyof typeof actionColors] ||
             actionColors.view;

@@ -380,7 +380,7 @@ export default async function FacilityDetailPage({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {staffWithDetails.map((staff) => (
+                    {staffWithDetails.map((staff: any) => (
                       <TableRow key={staff.id}>
                         <TableCell className="font-medium">
                           {staff.userDetails?.name || "Unknown"}
