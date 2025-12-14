@@ -20,6 +20,10 @@ export default async function PatientDetailsPage({
 }) {
   const supabase = createServiceClient();
 
+  if (!supabase) {
+    notFound();
+  }
+
   // Fetch patient details
   const { data: patient, error } = await supabase
     .from("patients")
