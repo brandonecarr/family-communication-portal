@@ -36,6 +36,7 @@ import { inviteFamilyMemberAction } from "@/lib/actions/patients";
 import { Database } from "@/types/supabase";
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"];
+type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
 
 export const dynamic = "force-dynamic";
 
@@ -224,7 +225,7 @@ export default async function AdminFamilyAccessPage({
 
       {/* Family Members List */}
       <div className="grid gap-4">
-        {familyMembers?.map((member) => (
+        {familyMembers?.map((member: FamilyMember) => (
           <Card key={member.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
