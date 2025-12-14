@@ -132,7 +132,14 @@ export async function createFacility(formData: FormData) {
           // Build the proper link format: /facility-setup?code=xxx&facility=xxx&token=xxx
           const setupUrl = `${origin}/facility-setup?code=${tokenHash}&facility=${facility.id}&token=${token}`;
           
-          // Send email via Brevo
+          // Log the URL being sent for debugging
+          console.log("=== FACILITY INVITE EMAIL ===");
+          console.log("Origin:", origin);
+          console.log("Setup URL:", setupUrl);
+          console.log("Token hash:", tokenHash);
+          console.log("=============================");
+          
+          // Send email via Brevo - use raw HTML to avoid link tracking
           const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
           const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
           
@@ -150,7 +157,7 @@ export async function createFacility(formData: FormData) {
                   template: {
                     title: `Welcome to ${name}!`,
                     preheader: "Click the link below to complete your facility administrator setup",
-                    bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                    bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Click the button below to set up your account and complete the facility onboarding process.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;"><strong>Copy and paste this link into your browser:</strong></p><p style="color: #7A9B8E; font-size: 14px; line-height: 1.6; margin: 0; word-break: break-all;">${setupUrl}</p>`,
                     ctaButton: {
                       text: "Complete Setup",
                       url: setupUrl,
@@ -501,6 +508,12 @@ export async function resendFacilityInvite(facilityId: string) {
         // Build the proper link format: /facility-setup?code=xxx&facility=xxx&token=xxx
         const setupUrl = `${origin}/facility-setup?code=${tokenHash}&facility=${facilityId}&token=${token}`;
         
+        // Log the URL being sent for debugging
+        console.log("=== RESEND FACILITY INVITE EMAIL ===");
+        console.log("Origin:", origin);
+        console.log("Setup URL:", setupUrl);
+        console.log("====================================");
+        
         // Send email via Brevo
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -519,7 +532,7 @@ export async function resendFacilityInvite(facilityId: string) {
                 template: {
                   title: `Welcome to ${facility.name}!`,
                   preheader: "Click the link below to complete your facility administrator setup",
-                  bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0;">Click the button below to set up your account and complete the facility onboarding process.</p>`,
+                  bodyContent: `<p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">You have been invited as the administrator for <strong>${facility.name}</strong>.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Click the button below to set up your account.</p><p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 16px;"><strong>If the button doesn't work, copy and paste this link:</strong></p><p style="color: #7A9B8E; font-size: 14px; line-height: 1.6; margin: 0; word-break: break-all;">${setupUrl}</p>`,
                   ctaButton: {
                     text: "Complete Setup",
                     url: setupUrl,

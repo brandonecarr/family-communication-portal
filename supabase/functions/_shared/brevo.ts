@@ -4,7 +4,9 @@ export interface SendEmailParams {
   to: string;
   subject: string;
   htmlContent: string;
+  textContent?: string;
   replyTo?: string;
+  disableTracking?: boolean;
 }
 
 export interface SendEmailResult {
@@ -24,6 +26,39 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
 
   try {
+    // Build request body
+    const requestBody: Record<string, unknown> = {
+      sender: {
+        name: BREVO_SENDER_NAME,
+        email: BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: params.to }],
+      subject: params.subject,
+      htmlContent: params.htmlContent,
+    };
+    
+    // Add plain text version if provided
+    if (params.textContent) {
+      requestBody.textContent = params.textContent;
+    }
+    
+    // Add reply-to if provided
+    if (params.replyTo) {
+      requestBody.replyTo = { email: params.replyTo };
+    }
+    
+    // Disable tracking if requested - use ALL available methods
+    if (params.disableTracking !== false) {
+      // Method 1: Custom headers
+      requestBody.headers = {
+        "X-Mailin-Track": "0",
+        "X-Mailin-Track-Links": "0",
+        "X-Mailin-Track-Opens": "0"
+      };
+      // Method 2: Tags with tracking disabled
+      requestBody.tags = ["no-tracking"];
+    }
+
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
@@ -31,21 +66,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        sender: {
-          name: BREVO_SENDER_NAME,
-          email: BREVO_SENDER_EMAIL,
-        },
-        to: [{ email: params.to }],
-        subject: params.subject,
-        htmlContent: params.htmlContent,
-        ...(params.replyTo && { replyTo: { email: params.replyTo } }),
-        headers: {
-          "X-Mailin-Track": "0",
-          "X-Mailin-Track-Links": "0",
-          "X-Mailin-Track-Opens": "0"
-        }
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const result = await response.json();
