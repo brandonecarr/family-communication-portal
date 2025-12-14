@@ -102,10 +102,7 @@ export async function createFacility(formData: FormData) {
     }
 
     // Send magic link email using Supabase Auth
-    const origin = process.env.NEXT_PUBLIC_SITE_URL;
-    if (!origin) {
-      throw new Error("NEXT_PUBLIC_SITE_URL environment variable is not set");
-    }
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.canvases.tempo.build').replace('https://', 'https://') || '';
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: adminEmail,
       options: {
@@ -421,10 +418,7 @@ export async function resendFacilityInvite(facilityId: string) {
   }
 
   // Send magic link
-  const origin = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!origin) {
-    throw new Error("NEXT_PUBLIC_SITE_URL environment variable is not set");
-  }
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.canvases.tempo.build').replace('https://', 'https://') || '';
   const { error: otpError } = await supabase.auth.signInWithOtp({
     email: adminEmail,
     options: {
@@ -463,6 +457,7 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
     return { success: false, error: "Service client not available" };
   }
   
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.canvases.tempo.build').replace('https://', 'https://') || '';
   const results = [];
   
   for (const staff of staffMembers) {
