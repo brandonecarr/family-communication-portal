@@ -447,7 +447,7 @@ export default async function FacilityDetailPage({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {patients.map((patient) => (
+                    {patients.map((patient: any) => (
                       <TableRow key={patient.id}>
                         <TableCell className="font-medium">{patient.name}</TableCell>
                         <TableCell>
