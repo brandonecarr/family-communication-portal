@@ -4,6 +4,8 @@ import FamilyNavbar from "@/components/family/family-navbar";
 import MobileLayout from "./mobile-layout";
 import { NotificationProvider } from "@/components/notification-provider";
 
+export const dynamic = "force-dynamic";
+
 export default async function FamilyLayout({
   children,
 }: {

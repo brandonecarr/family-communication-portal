@@ -7,7 +7,21 @@ export const createClient = async () => {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase URL or Anon Key environment variables");
+    // Return a mock client that will fail gracefully during build time
+    // This allows pages with dynamic = "force-dynamic" to build without errors
+    console.warn("Supabase environment variables not available - returning mock client");
+    return {
+      auth: {
+        getUser: async () => ({ data: { user: null }, error: new Error("No Supabase credentials") }),
+        getSession: async () => ({ data: { session: null }, error: new Error("No Supabase credentials") }),
+      },
+      from: () => ({
+        select: () => ({ data: null, error: new Error("No Supabase credentials"), single: () => ({ data: null, error: new Error("No Supabase credentials") }) }),
+        insert: () => ({ data: null, error: new Error("No Supabase credentials") }),
+        update: () => ({ data: null, error: new Error("No Supabase credentials") }),
+        delete: () => ({ data: null, error: new Error("No Supabase credentials") }),
+      }),
+    } as any;
   }
 
   const cookieStore = await cookies();
@@ -40,7 +54,8 @@ export const createServiceClient = () => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   
   if (!url || !key) {
-    throw new Error("Missing Supabase URL or Service Key");
+    console.warn("Supabase service credentials not available");
+    return null;
   }
   
   return createSupabaseClient(url, key);
