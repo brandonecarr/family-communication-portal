@@ -273,7 +273,7 @@ export async function getThreadWithMessages(threadId: string) {
   if (messagesError) throw messagesError;
 
   // Get sender details for messages
-  const senderIds = [...new Set((messages || []).map((m: any) => m.sender_id))];
+  const senderIds = Array.from(new Set((messages || []).map((m: any) => m.sender_id)));
   let senderUsers: any[] = [];
   
   if (senderIds.length > 0) {
