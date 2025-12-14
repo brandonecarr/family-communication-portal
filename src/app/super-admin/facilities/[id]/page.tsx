@@ -115,7 +115,7 @@ export default async function FacilityDetailPage({
   // Stats
   const stats = {
     patients: patients?.length || 0,
-    activePatients: patients?.filter(p => p.status === "active").length || 0,
+    activePatients: patients?.filter((p: any) => p.status === "active").length || 0,
     staff: staffMembers?.length || 0,
     familyMembers: familyMembers?.length || 0,
   };
