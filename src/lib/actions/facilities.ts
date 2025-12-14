@@ -102,27 +102,39 @@ export async function createFacility(formData: FormData) {
       console.error("Error creating invite:", inviteError);
     }
 
-    // Use Supabase's built-in inviteUserByEmail with proper redirect
+    // Use signInWithOtp to send a magic link - this uses PKCE and redirects with ?code= format
     const origin = getSiteUrl();
     const redirectUrl = `${origin}/facility-setup?facility=${facility.id}&token=${token}`;
     
     const serviceClient = createServiceClient();
     if (serviceClient) {
-      const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-        adminEmail,
-        {
-          data: {
-            full_name: adminName || name + " Admin",
-            role: "agency_admin",
-            agency_id: facility.id,
-            needs_password_setup: true,
-          },
-          redirectTo: redirectUrl,
-        }
-      );
+      // First create the user with admin API
+      const { data: userData, error: createError } = await serviceClient.auth.admin.createUser({
+        email: adminEmail,
+        email_confirm: true, // Mark as confirmed so magic link works
+        user_metadata: {
+          full_name: adminName || name + " Admin",
+          role: "agency_admin",
+          agency_id: facility.id,
+          needs_password_setup: true,
+        },
+      });
 
-      if (inviteError) {
-        console.error("Error inviting user:", inviteError);
+      if (createError && !createError.message.includes("already been registered")) {
+        console.error("Error creating user:", createError);
+      }
+      
+      // Now send a magic link to the user - this will use PKCE flow
+      const { error: otpError } = await serviceClient.auth.signInWithOtp({
+        email: adminEmail,
+        options: {
+          shouldCreateUser: false, // User already created above
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (otpError) {
+        console.error("Error sending magic link:", otpError);
       }
     } else {
       console.error("Service client not available for sending invite");
@@ -424,28 +436,25 @@ export async function resendFacilityInvite(facilityId: string) {
     }
   }
 
-  // Use Supabase's built-in inviteUserByEmail with proper redirect
+  // Use signInWithOtp to send a magic link - this uses PKCE and redirects with ?code= format
   const origin = getSiteUrl();
   const redirectUrl = `${origin}/facility-setup?facility=${facilityId}&token=${token}`;
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
-    const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-      adminEmail,
-      {
-        data: {
-          full_name: facility.name + " Admin",
-          role: "agency_admin",
-          agency_id: facilityId,
-          needs_password_setup: true,
-        },
-        redirectTo: redirectUrl,
-      }
-    );
+    // Just send the magic link - the user was already created when the facility was first created
+    // signInWithOtp with shouldCreateUser: false will work for existing users
+    const { error: otpError } = await serviceClient.auth.signInWithOtp({
+      email: adminEmail,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: redirectUrl,
+      },
+    });
 
-    if (inviteError) {
-      console.error("Error inviting user:", inviteError);
-      return { error: inviteError.message };
+    if (otpError) {
+      console.error("Error sending magic link:", otpError);
+      return { error: otpError.message };
     }
   } else {
     return { error: "Service client not available" };

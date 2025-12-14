@@ -62,41 +62,28 @@ function AdminSetupContent() {
 
   const supabase = createClient();
 
-  // Handle auth from hash fragment (Supabase inviteUserByEmail uses implicit flow)
+  // Handle auth code exchange (PKCE flow from magic link)
   useEffect(() => {
-    const handleHashAuth = async () => {
-      // Check if there's a hash fragment with access_token
-      if (typeof window !== 'undefined' && window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
-        
-        if (accessToken && refreshToken) {
-          setAuthProcessed(true);
-          try {
-            const { error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (error) {
-              console.error("Error setting session:", error);
-            } else {
-              // Clear the hash from URL
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            }
-          } catch (err) {
-            console.error("Error setting session:", err);
+    const exchangeCode = async () => {
+      if (authCode && !authProcessed) {
+        setAuthProcessed(true);
+        try {
+          const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+          if (error) {
+            console.error("Error exchanging code for session:", error);
           }
+        } catch (err) {
+          console.error("Error exchanging code:", err);
         }
       }
     };
-    handleHashAuth();
-  }, [supabase.auth]);
+    exchangeCode();
+  }, [authCode, authProcessed, supabase.auth]);
 
   useEffect(() => {
     const loadData = async () => {
-      // Wait for hash auth to complete
-      if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token') && !authProcessed) {
+      // Wait for code exchange to complete
+      if (authCode && !authProcessed) {
         return;
       }
       
