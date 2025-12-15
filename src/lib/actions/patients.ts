@@ -144,15 +144,27 @@ export async function inviteFamilyMember(formData: FormData) {
   }
 }
 
-// Form action that throws errors (for form action usage)
+// Form action that redirects with error/success messages (for form action usage)
 export async function inviteFamilyMemberAction(formData: FormData) {
   const supabase = createServiceClient();
   
+  const patient_id = formData.get("patient_id") as string;
+  const redirectTo = formData.get("redirectTo") as string || "/admin/family-access";
+  
+  // Helper to build redirect URL with error
+  const redirectWithError = (errorMessage: string) => {
+    const url = new URL(redirectTo, "http://localhost");
+    url.searchParams.set("invite", "open");
+    url.searchParams.set("error", errorMessage);
+    if (patient_id) url.searchParams.set("patient", patient_id);
+    redirect(url.pathname + url.search);
+  };
+  
   if (!supabase) {
-    throw new Error("Service client not available");
+    redirectWithError("Service client not available");
+    return;
   }
   
-  const patient_id = formData.get("patient_id") as string;
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
   const phone = formData.get("phone") as string | null;
@@ -168,7 +180,8 @@ export async function inviteFamilyMemberAction(formData: FormData) {
     .maybeSingle();
   
   if (emailExists) {
-    throw new Error("A family member with this email already exists for this patient");
+    redirectWithError("A family member with this email already exists for this patient");
+    return;
   }
   
   // Check for duplicate name
@@ -180,7 +193,8 @@ export async function inviteFamilyMemberAction(formData: FormData) {
     .maybeSingle();
   
   if (nameExists) {
-    throw new Error("A family member with this name already exists for this patient");
+    redirectWithError("A family member with this name already exists for this patient");
+    return;
   }
   
   // Check for duplicate phone (if provided)
@@ -193,7 +207,8 @@ export async function inviteFamilyMemberAction(formData: FormData) {
       .maybeSingle();
     
     if (phoneExists) {
-      throw new Error("A family member with this phone number already exists for this patient");
+      redirectWithError("A family member with this phone number already exists for this patient");
+      return;
     }
   }
   
@@ -213,11 +228,17 @@ export async function inviteFamilyMemberAction(formData: FormData) {
   
   if (error) {
     console.error("Error inviting family member:", error);
-    throw new Error(error.message || "Failed to invite family member");
+    redirectWithError(error.message || "Failed to invite family member");
+    return;
   }
   
   revalidatePath(`/admin/patients/${patient_id}`);
   revalidatePath("/admin/family-access");
+  
+  // Redirect with success message
+  const successUrl = new URL(redirectTo, "http://localhost");
+  successUrl.searchParams.set("success", "Family member invited successfully");
+  redirect(successUrl.pathname + successUrl.search);
 }
 
 export async function updateFamilyMember(formData: FormData) {

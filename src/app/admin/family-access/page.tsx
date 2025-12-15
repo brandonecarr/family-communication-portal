@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Users, 
   Search, 
@@ -16,7 +17,9 @@ import {
   MoreVertical,
   Trash2,
   X,
-  Send
+  Send,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,7 +48,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminFamilyAccessPage({
   searchParams,
 }: {
-  searchParams: { patient?: string; action?: string };
+  searchParams: { patient?: string; action?: string; invite?: string; error?: string; success?: string };
 }) {
   const supabase = await createClient();
   const {
@@ -56,7 +59,7 @@ export default async function AdminFamilyAccessPage({
     return redirect("/sign-in");
   }
 
-  const showInviteForm = searchParams.action === "invite";
+  const showInviteForm = searchParams.action === "invite" || searchParams.invite === "open" || !!searchParams.error;
   const selectedPatientId = searchParams.patient;
 
   // Fetch all patients for the dropdown
@@ -134,6 +137,22 @@ export default async function AdminFamilyAccessPage({
             </Link>
           </CardHeader>
           <CardContent>
+            {/* Error Message */}
+            {searchParams.error && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{searchParams.error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Success Message */}
+            {searchParams.success && (
+              <Alert className="mb-6 border-[#7A9B8E] bg-[#7A9B8E]/10">
+                <CheckCircle className="h-4 w-4 text-[#7A9B8E]" />
+                <AlertDescription className="text-[#7A9B8E]">{searchParams.success}</AlertDescription>
+              </Alert>
+            )}
+            
             <form action={inviteFamilyMemberAction} className="space-y-6">
               <input type="hidden" name="redirectTo" value={selectedPatientId ? `/admin/patients/${selectedPatientId}` : "/admin/family-access"} />
               
