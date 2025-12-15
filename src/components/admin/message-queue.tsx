@@ -137,9 +137,17 @@ export default function MessageQueue() {
             .eq("thread_id", thread.id)
             .gt("created_at", participant?.last_read_at || "1970-01-01");
 
+          // Transform the sender from array to object (Supabase returns arrays for joins)
+          const transformedMessage = lastMessage ? {
+            ...lastMessage,
+            sender: Array.isArray(lastMessage.sender) 
+              ? lastMessage.sender[0] || { full_name: null, name: null, email: '' }
+              : lastMessage.sender || { full_name: null, name: null, email: '' }
+          } : null;
+
           return {
             ...thread,
-            last_message: lastMessage,
+            last_message: transformedMessage,
             unread_count: unreadCount || 0,
           };
         })
