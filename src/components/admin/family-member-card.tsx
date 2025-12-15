@@ -32,8 +32,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Loader2, CheckCircle, Phone, Mail } from "lucide-react";
-import { updateFamilyMember, deleteFamilyMember } from "@/lib/actions/patients";
+import { Pencil, Trash2, Loader2, CheckCircle, Phone, Mail, Send } from "lucide-react";
+import { updateFamilyMember, deleteFamilyMember, resendFamilyInvitation } from "@/lib/actions/patients";
+import { useToast } from "@/components/ui/use-toast";
 
 interface FamilyMember {
   id: string;
@@ -72,12 +73,14 @@ export function FamilyMemberCard({
   patientId: string;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [phone, setPhone] = useState(member.phone ? formatPhoneNumber(member.phone) : "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isResending, setIsResending] = useState(false);
   const [isDeleting, startDeleteTransition] = useTransition();
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -124,6 +127,28 @@ export function FamilyMemberCard({
     });
   }
 
+  async function handleResendInvite() {
+    setIsResending(true);
+    try {
+      await resendFamilyInvitation(member.id);
+      toast({
+        title: "Invitation resent",
+        description: "A new invitation email has been sent to " + member.email,
+      });
+      router.refresh();
+    } catch (err: any) {
+      toast({
+        title: "Failed to resend invitation",
+        description: err.message || "An error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  const isPendingInvite = member.status === "invited";
+
   return (
     <div className="flex items-center justify-between p-6 border rounded-lg bg-white">
       <div className="flex-1">
@@ -132,6 +157,11 @@ export function FamilyMemberCard({
           <Badge variant="outline" className="text-xs font-normal">
             {formatRelationship(member.relationship)}
           </Badge>
+          {isPendingInvite && (
+            <Badge variant="secondary" className="text-xs font-normal bg-amber-100 text-amber-800 border-amber-200">
+              Pending
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -150,6 +180,29 @@ export function FamilyMemberCard({
         <Badge className="bg-[#7A9B8E] hover:bg-[#7A9B8E]/90 text-white px-4 py-1.5">
           {formatRole(member.role)}
         </Badge>
+        
+        {/* Resend Invite Button - only show for pending invites */}
+        {isPendingInvite && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResendInvite}
+            disabled={isResending}
+            className="h-9 gap-2"
+          >
+            {isResending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Resend Invite
+              </>
+            )}
+          </Button>
+        )}
         
         {/* Edit Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
