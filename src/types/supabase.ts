@@ -518,6 +518,9 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          invite_expires_at: string | null
+          invite_sent_at: string | null
+          invite_token: string | null
           is_primary_contact: boolean | null
           name: string | null
           patient_id: string | null
@@ -533,6 +536,9 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          invite_expires_at?: string | null
+          invite_sent_at?: string | null
+          invite_token?: string | null
           is_primary_contact?: boolean | null
           name?: string | null
           patient_id?: string | null
@@ -548,6 +554,9 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          invite_expires_at?: string | null
+          invite_sent_at?: string | null
+          invite_token?: string | null
           is_primary_contact?: boolean | null
           name?: string | null
           patient_id?: string | null

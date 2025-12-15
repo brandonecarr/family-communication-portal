@@ -213,6 +213,11 @@ export async function inviteFamilyMemberAction(formData: FormData) {
     }
   }
   
+  // Generate invite token
+  const inviteToken = crypto.randomUUID();
+  const inviteExpiresAt = new Date();
+  inviteExpiresAt.setDate(inviteExpiresAt.getDate() + 7); // 7 days expiry
+  
   const { data, error } = await supabase
     .from("family_members")
     .insert({
@@ -223,6 +228,9 @@ export async function inviteFamilyMemberAction(formData: FormData) {
       role,
       relationship,
       status: "invited",
+      invite_token: inviteToken,
+      invite_sent_at: new Date().toISOString(),
+      invite_expires_at: inviteExpiresAt.toISOString(),
     })
     .select()
     .single();
@@ -233,12 +241,58 @@ export async function inviteFamilyMemberAction(formData: FormData) {
     return;
   }
   
+  // Get patient and agency info for the email
+  const { data: patient } = await supabase
+    .from("patients")
+    .select("first_name, last_name, agency_id")
+    .eq("id", patient_id)
+    .single();
+  
+  let agencyName = "Family Communication Portal";
+  if (patient?.agency_id) {
+    const { data: agency } = await supabase
+      .from("agencies")
+      .select("name")
+      .eq("id", patient.agency_id)
+      .single();
+    if (agency?.name) {
+      agencyName = agency.name;
+    }
+  }
+  
+  const patientName = patient ? `${patient.first_name} ${patient.last_name}` : "your loved one";
+  
+  // Send invitation email via edge function
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  
+  try {
+    const { error: emailError } = await supabase.functions.invoke("supabase-functions-send-family-invitation", {
+      body: {
+        email,
+        token: inviteToken,
+        familyMemberName: name,
+        patientName,
+        agencyName,
+        relationship,
+        baseUrl,
+      },
+    });
+    
+    if (emailError) {
+      console.error("Error sending invitation email:", emailError);
+      // Don't fail the whole operation, just log the error
+    }
+  } catch (emailErr) {
+    console.error("Failed to send invitation email:", emailErr);
+    // Don't fail the whole operation, just log the error
+  }
+  
   revalidatePath(`/admin/patients/${patient_id}`);
   revalidatePath("/admin/family-access");
   
   // Redirect with success message
   const successUrl = new URL(redirectTo, "http://localhost");
-  successUrl.searchParams.set("success", "Family member invited successfully");
+  successUrl.searchParams.set("success", "Family member invited successfully. An invitation email has been sent.");
   redirect(successUrl.pathname + successUrl.search);
 }
 

@@ -29,6 +29,12 @@ interface InvitationData {
   agency?: {
     name: string;
   };
+  // Family member specific fields
+  type?: "staff" | "family";
+  patient_id?: string;
+  patient_name?: string;
+  relationship?: string;
+  family_member_id?: string;
 }
 
 function AcceptInviteContent() {
@@ -41,6 +47,7 @@ function AcceptInviteContent() {
   const email = searchParams.get("email");
   const authCode = searchParams.get("code"); // OTP code from generateLink
   const facilityId = searchParams.get("facility");
+  const inviteType = searchParams.get("type"); // "family" for family member invites
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -150,6 +157,73 @@ function AcceptInviteContent() {
       }
 
       try {
+        // Check if this is a family member invitation
+        if (inviteType === "family") {
+          const { data: familyData, error: familyError } = await supabase
+            .from("family_members")
+            .select(`
+              *,
+              patient:patients(
+                id,
+                first_name,
+                last_name,
+                agency_id,
+                agency:agencies(name)
+              )
+            `)
+            .eq("invite_token", token)
+            .eq("email", decodeURIComponent(email))
+            .single();
+
+          if (familyError || !familyData) {
+            setError("Invitation not found. It may have been cancelled or already used.");
+            setLoading(false);
+            return;
+          }
+
+          if (familyData.status !== "invited") {
+            setError("This invitation has already been accepted or cancelled.");
+            setLoading(false);
+            return;
+          }
+
+          if (familyData.invite_expires_at) {
+            const expiresAt = new Date(familyData.invite_expires_at);
+            if (expiresAt < new Date()) {
+              setError("This invitation has expired. Please ask the care team to send a new one.");
+              setLoading(false);
+              return;
+            }
+          }
+
+          const patient = familyData.patient as any;
+          const patientName = patient ? `${patient.first_name} ${patient.last_name}` : "your loved one";
+          const agencyName = patient?.agency?.name || "Family Communication Portal";
+
+          setInvitation({
+            id: familyData.id,
+            email: familyData.email,
+            role: "family_member",
+            agency_id: patient?.agency_id || "",
+            invited_by_name: "Care Team",
+            status: familyData.status,
+            expires_at: familyData.invite_expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            agency: { name: agencyName },
+            type: "family",
+            patient_id: familyData.patient_id,
+            patient_name: patientName,
+            relationship: familyData.relationship,
+            family_member_id: familyData.id,
+          });
+          setFormData(prev => ({
+            ...prev,
+            fullName: familyData.name || "",
+          }));
+          setLoading(false);
+          return;
+        }
+
+        // Staff invitation flow
         const { data: inviteData, error: inviteError } = await supabase
           .from("team_invitations")
           .select(`
@@ -189,7 +263,7 @@ function AcceptInviteContent() {
     }
 
     validateInvitation();
-  }, [token, email, authCode, supabase]);
+  }, [token, email, authCode, inviteType, supabase]);
 
   const handleNext = () => {
     if (step === 1) {
@@ -285,7 +359,16 @@ function AcceptInviteContent() {
       }
 
       // 2. Update the invitation status
-      if (invitation.id !== "auth-flow") {
+      if (invitation.type === "family") {
+        // Family member invitation: update family_members table
+        await supabase
+          .from("family_members")
+          .update({ 
+            status: "active",
+            user_id: userId,
+          })
+          .eq("id", invitation.family_member_id);
+      } else if (invitation.id !== "auth-flow") {
         // Token-based flow: update by invitation id
         await supabase
           .from("team_invitations")
@@ -307,26 +390,33 @@ function AcceptInviteContent() {
         email: invitation.email,
         full_name: formData.fullName,
         phone: formData.phone || null,
-        role: invitation.role,
+        role: invitation.type === "family" ? "family_member" : invitation.role,
         agency_id: invitation.agency_id,
         onboarding_completed: true,
       });
 
       // 4. Add to agency_users (upsert to handle existing records from invite flow)
-      await supabase.from("agency_users").upsert({
-        user_id: userId,
-        agency_id: invitation.agency_id,
-        role: invitation.role,
-      }, { onConflict: 'user_id,agency_id' });
+      // Only for staff members, not family members
+      if (invitation.type !== "family") {
+        await supabase.from("agency_users").upsert({
+          user_id: userId,
+          agency_id: invitation.agency_id,
+          role: invitation.role,
+        }, { onConflict: 'user_id,agency_id' });
+      }
 
       toast({
         title: authUser ? "Account setup complete!" : "Account created!",
-        description: "Welcome to the team. Redirecting to your dashboard...",
+        description: invitation.type === "family" 
+          ? "Welcome to the Family Portal. Redirecting..." 
+          : "Welcome to the team. Redirecting to your dashboard...",
       });
 
       // Redirect based on role
       setTimeout(() => {
-        if (invitation.role === "agency_admin") {
+        if (invitation.type === "family") {
+          router.push("/family");
+        } else if (invitation.role === "agency_admin") {
           router.push("/admin");
         } else {
           router.push("/admin");
@@ -343,7 +433,19 @@ function AcceptInviteContent() {
     }
   };
 
-  const roleLabel = invitation?.role === "agency_admin" ? "Administrator" : "Staff Member";
+  const roleLabel = invitation?.type === "family" 
+    ? `Family Member (${invitation?.relationship || "Contact"})` 
+    : invitation?.role === "agency_admin" 
+      ? "Administrator" 
+      : "Staff Member";
+
+  const welcomeTitle = invitation?.type === "family" 
+    ? "Welcome to the Family Portal!" 
+    : "Welcome to the Team!";
+
+  const welcomeDescription = invitation?.type === "family"
+    ? <>You've been invited to access the Family Portal for <span className="font-medium">{invitation?.patient_name}</span> at <span className="font-medium">{invitation?.agency?.name}</span></>
+    : <>You've been invited to join <span className="font-medium">{invitation?.agency?.name}</span> as a <span className="font-medium">{roleLabel}</span></>;
 
   if (loading) {
     return (
@@ -387,11 +489,9 @@ function AcceptInviteContent() {
       <Card className="w-full max-w-lg soft-shadow border-0">
         <CardHeader className="bg-gradient-to-r from-[#7A9B8E] to-[#5a7b6e] text-white rounded-t-lg">
           <CardTitle className="text-center">
-            <h1 className="text-2xl font-semibold mb-2">Welcome to the Team!</h1>
+            <h1 className="text-2xl font-semibold mb-2">{welcomeTitle}</h1>
             <p className="text-white/80 text-sm font-normal">
-              You've been invited to join{" "}
-              <span className="font-medium">{invitation?.agency?.name}</span> as a{" "}
-              <span className="font-medium">{roleLabel}</span>
+              {welcomeDescription}
             </p>
           </CardTitle>
         </CardHeader>
