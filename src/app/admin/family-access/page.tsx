@@ -104,7 +104,7 @@ export default async function AdminFamilyAccessPage({
   const { data: patientsRaw } = await patientsQuery || { data: null };
 
   // Map patients to include full name
-  const patients = patientsRaw?.map((p: Patient) => ({
+  const patients = patientsRaw?.map((p: { id: string; first_name: string; last_name: string; agency_id: string }) => ({
     id: p.id,
     name: `${p.first_name} ${p.last_name}`.trim(),
   }));
