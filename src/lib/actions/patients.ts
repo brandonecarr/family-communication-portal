@@ -2,6 +2,7 @@
 
 import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 // Helper to get current user's agency_id
 async function getUserAgencyId(supabase: any): Promise<string | null> {
