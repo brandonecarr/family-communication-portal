@@ -20,6 +20,12 @@ export const updateSession = async (request: NextRequest) => {
   // Use the configured site URL for redirects
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.url;
   
+  // Allow facility-setup page to handle its own auth code verification
+  // Don't interfere with the OTP verification flow
+  if (request.nextUrl.pathname.startsWith("/facility-setup")) {
+    return response;
+  }
+  
   // Check if this is an auth callback with a code parameter
   const code = request.nextUrl.searchParams.get("code");
   const isRootPath = request.nextUrl.pathname === "/";

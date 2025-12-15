@@ -42,6 +42,7 @@ function AdminSetupContent() {
   const [user, setUser] = useState<any>(null);
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
   const [authProcessed, setAuthProcessed] = useState(false);
+  const [authVerified, setAuthVerified] = useState(false);
   
   const [formData, setFormData] = useState({
     password: "",
@@ -85,9 +86,16 @@ function AdminSetupContent() {
           if (result.error) {
             console.error("Error verifying token:", result.error);
           }
+          
+          // Mark auth as verified so loadData can proceed
+          setAuthVerified(true);
         } catch (err) {
           console.error("Error verifying token:", err);
+          setAuthVerified(true); // Still allow loadData to run and handle the error
         }
+      } else if (!authCode) {
+        // No auth code, mark as verified so loadData can proceed
+        setAuthVerified(true);
       }
     };
     verifyToken();
@@ -95,8 +103,8 @@ function AdminSetupContent() {
 
   useEffect(() => {
     const loadData = async () => {
-      // Wait for code exchange to complete
-      if (authCode && !authProcessed) {
+      // Wait for auth verification to complete
+      if (authCode && !authVerified) {
         return;
       }
       
@@ -145,7 +153,7 @@ function AdminSetupContent() {
     };
 
     loadData();
-  }, [facilityId, router, authCode, authProcessed]);
+  }, [facilityId, router, authCode, authVerified]);
 
   const handlePasswordSetup = async () => {
     if (formData.password !== formData.confirmPassword) {
