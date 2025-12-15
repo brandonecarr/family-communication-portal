@@ -329,6 +329,7 @@ export async function resendInvitation(invitationId: string) {
     .update({
       token,
       expires_at: expiresAt.toISOString(),
+      status: "pending", // Reset status to pending when resending
     })
     .eq("id", invitationId);
 

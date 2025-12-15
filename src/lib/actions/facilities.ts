@@ -459,7 +459,7 @@ export async function resendFacilityInvite(facilityId: string) {
     .single();
 
   if (existingInvite) {
-    // Update existing invite
+    // Update existing invite - reset status to pending and clear accepted_at
     const { error: updateError } = await supabase
       .from("facility_invites")
       .update({
@@ -467,6 +467,7 @@ export async function resendFacilityInvite(facilityId: string) {
         expires_at: expiresAt.toISOString(),
         created_by: currentUser?.id,
         accepted_at: null,
+        status: "pending", // Reset status to pending when resending
       })
       .eq("id", existingInvite.id);
 
