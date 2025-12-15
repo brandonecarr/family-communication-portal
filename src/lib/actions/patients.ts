@@ -381,8 +381,6 @@ export async function resendFamilyInvitation(familyMemberId: string) {
       },
     });
     
-    console.log("[RESEND FAMILY INVITE] Email function response:", { data: emailData, error: emailError });
-    
     if (emailError) {
       console.error("[RESEND FAMILY INVITE] Error sending invitation email:", emailError);
       throw new Error("Failed to send invitation email");

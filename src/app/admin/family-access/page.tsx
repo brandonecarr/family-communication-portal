@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { createClient, createServiceClient } from "../../../../supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ResendFamilyInviteButton } from "@/components/admin/resend-family-invite-button";
 import { 
   Users, 
   Search, 
@@ -17,7 +18,6 @@ import {
   MoreVertical,
   Trash2,
   X,
-  Send,
   AlertCircle,
   CheckCircle
 } from "lucide-react";
@@ -40,7 +40,12 @@ import { Database } from "@/types/supabase";
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"];
 type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"] & {
-  patient?: { name: string } | null;
+  patient?: { 
+    id: string;
+    first_name: string;
+    last_name: string;
+    agency_id: string;
+  } | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -51,6 +56,8 @@ export default async function AdminFamilyAccessPage({
   searchParams: { patient?: string; action?: string; invite?: string; error?: string; success?: string };
 }) {
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
+  
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -59,15 +66,42 @@ export default async function AdminFamilyAccessPage({
     return redirect("/sign-in");
   }
 
+  // Get user's role from users table
+  const { data: userData } = await serviceSupabase
+    ?.from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single() || { data: null };
+  
+  const isSuperAdmin = userData?.role === "super_admin";
+  
+  // Get agency_id from agency_users table
+  let userAgencyId: string | undefined;
+  if (!isSuperAdmin && serviceSupabase) {
+    const { data: agencyUserData } = await serviceSupabase
+      .from("agency_users")
+      .select("agency_id")
+      .eq("user_id", user.id)
+      .single();
+    
+    userAgencyId = agencyUserData?.agency_id;
+  }
+
   const showInviteForm = searchParams.action === "invite" || searchParams.invite === "open" || !!searchParams.error;
   const selectedPatientId = searchParams.patient;
 
-  // Fetch all patients for the dropdown
-  const { data: patientsRaw } = await supabase
-    .from("patients")
-    .select("id, first_name, last_name")
+  // Fetch all patients for the dropdown (filtered by agency unless super admin)
+  let patientsQuery = serviceSupabase
+    ?.from("patients")
+    .select("id, first_name, last_name, agency_id")
     .eq("status", "active")
     .order("first_name");
+  
+  if (!isSuperAdmin && userAgencyId) {
+    patientsQuery = patientsQuery?.eq("agency_id", userAgencyId);
+  }
+
+  const { data: patientsRaw } = await patientsQuery || { data: null };
 
   // Map patients to include full name
   const patients = patientsRaw?.map((p: Patient) => ({
@@ -81,21 +115,76 @@ export default async function AdminFamilyAccessPage({
     : null;
 
   // Fetch all family members (filter by patient if provided)
-  let familyQuery = supabase
-    .from("family_members")
-    .select(`
-      *,
-      patient:patient_id (
-        name
-      )
-    `)
-    .order("created_at", { ascending: false });
+  // Use service client to bypass RLS, but filter by agency for security
+  let familyMembersData: FamilyMember[] | null = null;
+  let familyMembersError: any = null;
 
   if (selectedPatientId) {
-    familyQuery = familyQuery.eq("patient_id", selectedPatientId);
+    // Filter by specific patient
+    const { data, error } = await serviceSupabase
+      ?.from("family_members")
+      .select(`
+        *,
+        patient:patients!patient_id (
+          id,
+          first_name,
+          last_name,
+          agency_id
+        )
+      `)
+      .eq("patient_id", selectedPatientId)
+      .order("created_at", { ascending: false }) || { data: null, error: null };
+    
+    familyMembersData = data;
+    familyMembersError = error;
+  } else if (isSuperAdmin) {
+    // Super admin sees all family members
+    const { data, error } = await serviceSupabase
+      ?.from("family_members")
+      .select(`
+        *,
+        patient:patients!patient_id (
+          id,
+          first_name,
+          last_name,
+          agency_id
+        )
+      `)
+      .order("created_at", { ascending: false }) || { data: null, error: null };
+    
+    familyMembersData = data;
+    familyMembersError = error;
+  } else if (userAgencyId) {
+    // Agency admin sees only their agency's family members
+    // We need to join with patients to filter by agency
+    const { data: agencyPatients } = await serviceSupabase
+      ?.from("patients")
+      .select("id")
+      .eq("agency_id", userAgencyId) || { data: null };
+    
+    const patientIds = agencyPatients?.map(p => p.id) || [];
+    
+    if (patientIds.length > 0) {
+      const { data, error } = await serviceSupabase
+        ?.from("family_members")
+        .select(`
+          *,
+          patient:patients!patient_id (
+            id,
+            first_name,
+            last_name,
+            agency_id
+          )
+        `)
+        .in("patient_id", patientIds)
+        .order("created_at", { ascending: false }) || { data: null, error: null };
+      
+      familyMembersData = data;
+      familyMembersError = error;
+    }
   }
 
-  const { data: familyMembers } = await familyQuery;
+  const familyMembers = familyMembersData;
 
   const roleColors = {
     family_admin: "bg-[#7A9B8E]/20 text-[#7A9B8E]",
@@ -246,7 +335,26 @@ export default async function AdminFamilyAccessPage({
 
       {/* Family Members List */}
       <div className="grid gap-4">
-        {familyMembers?.map((member: FamilyMember) => (
+        {!familyMembers || familyMembers.length === 0 ? (
+          <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <CardContent className="pt-6 pb-6 text-center">
+              <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No family members found</h3>
+              <p className="text-muted-foreground mb-4">
+                {selectedPatientId 
+                  ? "This patient doesn't have any family members invited yet."
+                  : "No family members have been invited across any patients."}
+              </p>
+              <Link href={`/admin/family-access?action=invite${selectedPatientId ? `&patient=${selectedPatientId}` : ""}`}>
+                <Button className="rounded-full gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Invite Family Member
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          familyMembers.map((member: FamilyMember) => (
           <Card key={member.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
@@ -262,12 +370,19 @@ export default async function AdminFamilyAccessPage({
                       <div>
                         <h3 className="font-semibold text-lg">{member.name || "Unnamed"}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Patient: {member.patient?.name || "Unknown"}
+                          Patient: {member.patient ? `${member.patient.first_name} ${member.patient.last_name}` : "Unknown"}
                         </p>
                       </div>
-                      <Badge className={roleColors[member.role as keyof typeof roleColors]}>
-                        {member.role === "family_admin" ? "Administrator" : "Family Member"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {member.status === "invited" && (
+                          <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                            Pending
+                          </Badge>
+                        )}
+                        <Badge className={roleColors[member.role as keyof typeof roleColors]}>
+                          {member.role === "family_admin" ? "Administrator" : "Family Member"}
+                        </Badge>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -292,6 +407,9 @@ export default async function AdminFamilyAccessPage({
                     </div>
 
                     <div className="flex items-center gap-2 pt-2">
+                      {member.status === "invited" && (
+                        <ResendFamilyInviteButton familyMemberId={member.id} />
+                      )}
                       <Button variant="outline" size="sm" className="rounded-full">
                         View Activity
                       </Button>
@@ -318,19 +436,7 @@ export default async function AdminFamilyAccessPage({
               </div>
             </CardContent>
           </Card>
-        ))}
-
-        {familyMembers?.length === 0 && (
-          <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="h-16 w-16 text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No family members found</h3>
-              <p className="text-sm text-muted-foreground text-center max-w-sm">
-                Family members will appear here once they're added
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        )))}
       </div>
     </div>
   );
