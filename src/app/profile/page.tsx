@@ -56,33 +56,41 @@ export default function ProfilePage() {
 
       setUser(user);
 
-      // Fetch from users table for name, phone, and role
-      const { data: usersData } = await supabase
+      // Fetch from users table for name and role (phone column may not exist)
+      const { data: usersData, error: usersError } = await supabase
         .from("users")
-        .select("full_name, name, phone, role")
+        .select("full_name, name, role")
         .eq("id", user.id)
         .single();
 
+      if (usersError) {
+        console.log("Users table query error (may be RLS):", usersError.message);
+      }
+      
       setUserData(usersData);
 
-      // Fetch from family_members table for additional profile data
-      const { data: profileData } = await supabase
+      // Fetch from family_members table for additional profile data (only for family members)
+      const { data: profileData, error: profileError } = await supabase
         .from("family_members")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle() to avoid error when no rows found
 
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.log("Family members query error:", profileError.message);
+      }
+      
       setProfile(profileData);
       
-      // Set name from users table (full_name or name) or family_members table
-      const displayName = usersData?.full_name || usersData?.name || profileData?.name || "";
+      // Set name from users table (full_name or name) or family_members table or user metadata
+      const displayName = usersData?.full_name || usersData?.name || profileData?.name || user.user_metadata?.full_name || "";
       setName(displayName);
       
-      // Set phone from users table first, then fall back to family_members table
-      const displayPhone = usersData?.phone || profileData?.phone || "";
+      // Set phone from family_members table or user metadata
+      const displayPhone = profileData?.phone || user.user_metadata?.phone || "";
       setPhone(displayPhone);
       
-      console.log("Profile data loaded:", { usersData, profileData, displayName, displayPhone });
+      console.log("Profile data loaded:", { usersData, profileData, displayName, displayPhone, userMetadata: user.user_metadata });
     };
 
     fetchProfile();
@@ -221,7 +229,7 @@ export default function ProfilePage() {
                 <Label>Current Role</Label>
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-full bg-[#7A9B8E]/10 text-[#7A9B8E] text-sm font-medium">
-                    {userData?.role?.replace('_', ' ').toUpperCase() || 'FAMILY MEMBER'}
+                    {(userData?.role || user?.user_metadata?.role || 'family_member').replace(/_/g, ' ').toUpperCase()}
                   </div>
                 </div>
               </div>
