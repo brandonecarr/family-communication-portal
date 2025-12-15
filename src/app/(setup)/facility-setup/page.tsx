@@ -87,6 +87,9 @@ function AdminSetupContent() {
             console.error("Error verifying token:", result.error);
           }
           
+          // Wait a moment for the session to be fully established
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // Mark auth as verified so loadData can proceed
           setAuthVerified(true);
         } catch (err) {
