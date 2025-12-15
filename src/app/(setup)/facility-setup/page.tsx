@@ -68,13 +68,22 @@ function AdminSetupContent() {
       if (authCode && !authProcessed) {
         setAuthProcessed(true);
         try {
-          // The code is a hashed_token from generateLink - use verifyOtp
-          const { error } = await supabase.auth.verifyOtp({
+          // The code is a hashed_token from generateLink - try invite type first, then magiclink
+          let result = await supabase.auth.verifyOtp({
             token_hash: authCode,
             type: "invite",
           });
-          if (error) {
-            console.error("Error verifying token:", error);
+          
+          // If invite type fails, try magiclink type (for resent invites)
+          if (result.error) {
+            result = await supabase.auth.verifyOtp({
+              token_hash: authCode,
+              type: "magiclink",
+            });
+          }
+          
+          if (result.error) {
+            console.error("Error verifying token:", result.error);
           }
         } catch (err) {
           console.error("Error verifying token:", err);

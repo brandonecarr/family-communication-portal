@@ -429,6 +429,7 @@ export type Database = {
           expires_at: string
           id: string
           role: string | null
+          setup_url: string | null
           token: string
         }
         Insert: {
@@ -440,6 +441,7 @@ export type Database = {
           expires_at: string
           id?: string
           role?: string | null
+          setup_url?: string | null
           token: string
         }
         Update: {
@@ -451,6 +453,7 @@ export type Database = {
           expires_at?: string
           id?: string
           role?: string | null
+          setup_url?: string | null
           token?: string
         }
         Relationships: [

@@ -147,7 +147,16 @@ export async function createFacility(formData: FormData) {
         console.log("Setup URL:", setupUrl);
         console.log("=======================");
         
-        // Send email via Supabase edge function (not Brevo)
+        // Store the setup URL in the facility_invites table
+        await supabase
+          .from("facility_invites")
+          .update({ 
+            setup_url: setupUrl,
+          })
+          .eq("agency_id", facility.id)
+          .eq("email", adminEmail);
+          
+        // Send email automatically via Supabase edge function
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         
@@ -487,18 +496,10 @@ export async function resendFacilityInvite(facilityId: string) {
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
-    // Generate an invite link to get the OTP token
+    // For resending, user already exists - use magiclink type instead of invite
     const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-      type: "invite",
+      type: "magiclink",
       email: adminEmail,
-      options: {
-        data: {
-          full_name: facility.name + " Admin",
-          role: "agency_admin",
-          agency_id: facilityId,
-          needs_password_setup: true,
-        },
-      },
     });
 
     if (linkError) {
@@ -512,13 +513,22 @@ export async function resendFacilityInvite(facilityId: string) {
       console.log("Setup URL:", setupUrl);
       console.log("==============================");
       
-      // Send email via Supabase edge function
+      // Store the setup URL in the facility_invites table
+      await supabase
+        .from("facility_invites")
+        .update({ 
+          setup_url: setupUrl,
+        })
+        .eq("agency_id", facilityId)
+        .eq("email", adminEmail);
+        
+      // Send email automatically via Supabase edge function
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       
       if (supabaseUrl && supabaseAnonKey) {
         try {
-          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+          await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -542,15 +552,8 @@ export async function resendFacilityInvite(facilityId: string) {
               `,
             }),
           });
-          
-          if (!emailResponse.ok) {
-            const errorText = await emailResponse.text();
-            console.error("Error sending email:", errorText);
-            return { error: "Failed to send invite email" };
-          }
         } catch (emailErr) {
           console.error("Error sending email:", emailErr);
-          return { error: "Failed to send invite email" };
         }
       }
     }
