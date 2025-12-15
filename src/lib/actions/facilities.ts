@@ -181,7 +181,7 @@ export async function createFacility(formData: FormData) {
                     </p>
                     <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
                     <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${setupUrl}</p>
-                    <p style="color: #999; font-size: 12px; margin-top: 32px;">This link will expire in 7 days.</p>
+                    <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 1 hour. If it expires, you can request a new invitation from your administrator.</p>
                   </div>
                 `,
               }),
@@ -497,11 +497,80 @@ export async function resendFacilityInvite(facilityId: string) {
   
   const serviceClient = createServiceClient();
   if (serviceClient) {
-    // For resending, user already exists - use magiclink type instead of invite
-    const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-      type: "magiclink",
-      email: adminEmail,
-    });
+    // First, check if user exists in auth
+    const { data: existingUsers } = await serviceClient.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(u => u.email === adminEmail);
+    
+    let linkData;
+    let linkError;
+    
+    if (existingUser) {
+      // User exists - delete and recreate to get a fresh invite token
+      // This ensures the new invite link will work even if the old one expired
+      console.log(`[RESEND] User ${adminEmail} exists (id: ${existingUser.id}), deleting and recreating for fresh invite`);
+      
+      // Delete the existing user from auth
+      const { error: deleteAuthError } = await serviceClient.auth.admin.deleteUser(existingUser.id);
+      if (deleteAuthError) {
+        console.error(`[RESEND] Error deleting auth user:`, deleteAuthError);
+      }
+      
+      // Also delete from users table if exists
+      const { error: deleteUserError } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", existingUser.id);
+      if (deleteUserError) {
+        console.error(`[RESEND] Error deleting from users table:`, deleteUserError);
+      }
+      
+      // Wait a moment for deletion to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create a fresh invite
+      console.log(`[RESEND] Creating fresh invite for ${adminEmail}`);
+      const result = await serviceClient.auth.admin.generateLink({
+        type: "invite",
+        email: adminEmail,
+        options: {
+          data: {
+            role: "agency_admin",
+            agency_id: facilityId,
+            needs_password_setup: true,
+          },
+        },
+      });
+      linkData = result.data;
+      linkError = result.error;
+      
+      if (linkError) {
+        console.error(`[RESEND] Error generating invite link:`, linkError);
+      } else {
+        console.log(`[RESEND] Successfully generated new invite link for ${adminEmail}`);
+      }
+    } else {
+      // User doesn't exist - use invite type to create them
+      console.log(`[RESEND] User ${adminEmail} does not exist, creating fresh invite`);
+      const result = await serviceClient.auth.admin.generateLink({
+        type: "invite",
+        email: adminEmail,
+        options: {
+          data: {
+            role: "agency_admin",
+            agency_id: facilityId,
+            needs_password_setup: true,
+          },
+        },
+      });
+      linkData = result.data;
+      linkError = result.error;
+      
+      if (linkError) {
+        console.error(`[RESEND] Error generating invite link:`, linkError);
+      } else {
+        console.log(`[RESEND] Successfully generated invite link for ${adminEmail}`);
+      }
+    }
 
     if (linkError) {
       console.error("Error generating link:", linkError);
@@ -529,7 +598,7 @@ export async function resendFacilityInvite(facilityId: string) {
       
       if (supabaseUrl && supabaseAnonKey) {
         try {
-          await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -548,11 +617,17 @@ export async function resendFacilityInvite(facilityId: string) {
                   </p>
                   <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
                   <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${setupUrl}</p>
-                  <p style="color: #999; font-size: 12px; margin-top: 32px;">This link will expire in 7 days.</p>
+                  <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 1 hour. If it expires, you can request a new invitation from your administrator.</p>
                 </div>
               `,
             }),
           });
+          
+          if (!emailResponse.ok) {
+            console.error("Email send failed:", await emailResponse.text());
+          } else {
+            console.log("Email sent successfully to:", adminEmail);
+          }
         } catch (emailErr) {
           console.error("Error sending email:", emailErr);
         }

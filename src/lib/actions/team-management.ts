@@ -250,18 +250,98 @@ export async function inviteTeamMember(data: {
     }
   }
 
-  // Generate invitation token
-  const token = crypto.randomBytes(32).toString("hex");
+  // Import service client to generate auth link
+  const { createServiceClient } = await import("../../../supabase/server");
+  const serviceClient = createServiceClient();
+  
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Check if user exists in auth and delete them to get a fresh invite
+  const { data: existingAuthUsers } = await serviceClient.auth.admin.listUsers();
+  const existingAuthUser = existingAuthUsers?.users?.find(u => u.email === data.email);
+  
+  if (existingAuthUser) {
+    console.log(`[INVITE] Deleting existing auth user for ${data.email}`);
+    await serviceClient.auth.admin.deleteUser(existingAuthUser.id);
+    
+    // Also delete from users table
+    await supabase
+      .from("users")
+      .delete()
+      .eq("id", existingAuthUser.id);
+    
+    // Wait for deletion to propagate
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  // Generate a fresh invite link using Supabase auth
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || "";
+  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+    type: "invite",
+    email: data.email,
+    options: {
+      data: {
+        full_name: data.name || "",
+        role: data.role,
+        agency_id: agencyId,
+        needs_password_setup: true,
+      },
+    },
+  });
+
+  if (linkError) {
+    console.error("Error generating invite link:", linkError);
+    throw new Error("Failed to generate invitation link");
+  }
+
+  const hashedToken = linkData?.properties?.hashed_token;
+  if (!hashedToken) {
+    throw new Error("Failed to generate invitation token");
+  }
+
+  // Create user record if it was created
+  if (linkData.user) {
+    const { error: userError } = await supabase
+      .from("users")
+      .insert({
+        id: linkData.user.id,
+        email: data.email,
+        full_name: data.name || "",
+        role: data.role,
+        agency_id: agencyId,
+        onboarding_completed: false,
+      });
+
+    if (userError) {
+      console.error("Error creating user record:", userError);
+    }
+
+    // Create agency_users relationship
+    const { error: agencyUserError } = await supabase
+      .from("agency_users")
+      .insert({
+        user_id: linkData.user.id,
+        agency_id: agencyId,
+        role: data.role,
+      });
+
+    if (agencyUserError) {
+      console.error("Error creating agency_users record:", agencyUserError);
+    }
+  }
+
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
 
-  // Create invitation
+  // Create invitation record with the auth token
   const { error } = await supabase.from("team_invitations").insert({
     email: data.email,
     role: data.role,
     agency_id: agencyId,
     invited_by_name: inviterData?.full_name || "Unknown",
-    token,
+    token: hashedToken,
     status: "pending",
     expires_at: expiresAt.toISOString(),
   });
@@ -280,13 +360,16 @@ export async function inviteTeamMember(data: {
     .eq("id", agencyId)
     .single();
 
-  // Send invitation email
-  const emailResult = await sendInvitationEmail({
+  // Build the invite URL with the auth code
+  const inviteUrl = `${origin}/accept-invite?code=${hashedToken}&facility=${agencyId}&email=${encodeURIComponent(data.email)}`;
+
+  // Send invitation email with the auth link
+  const emailResult = await sendInvitationEmailWithUrl({
     email: data.email,
-    token,
     inviterName: inviterData?.full_name || "A team member",
     agencyName: agencyData?.name || "the organization",
     role: data.role,
+    inviteUrl,
   });
 
   if (!emailResult.success) {
@@ -296,7 +379,7 @@ export async function inviteTeamMember(data: {
   }
 
   revalidatePath("/admin/team-management");
-  return { success: true, token, emailSent: emailResult.success };
+  return { success: true, token: hashedToken, emailSent: emailResult.success };
 }
 
 // Resend invitation
@@ -319,22 +402,101 @@ export async function resendInvitation(invitationId: string) {
     throw new Error("Invitation not found");
   }
 
-  // Generate new token and extend expiration
-  const token = crypto.randomBytes(32).toString("hex");
+  // Import service client to generate new auth link
+  const { createServiceClient } = await import("../../../supabase/server");
+  const serviceClient = createServiceClient();
+  
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Check if user exists in auth and delete them to get a fresh invite
+  const { data: existingUsers } = await serviceClient.auth.admin.listUsers();
+  const existingUser = existingUsers?.users?.find(u => u.email === invitation.email);
+  
+  if (existingUser) {
+    console.log(`[RESEND] Deleting existing auth user for ${invitation.email}`);
+    await serviceClient.auth.admin.deleteUser(existingUser.id);
+    
+    // Also delete from users table
+    await supabase
+      .from("users")
+      .delete()
+      .eq("id", existingUser.id);
+    
+    // Wait for deletion to propagate
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  // Generate a fresh invite link
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || "";
+  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+    type: "invite",
+    email: invitation.email,
+    options: {
+      data: {
+        role: invitation.role,
+        agency_id: invitation.agency_id,
+        needs_password_setup: true,
+      },
+    },
+  });
+
+  if (linkError) {
+    console.error("Error generating invite link:", linkError);
+    throw new Error("Failed to generate new invitation link");
+  }
+
+  const hashedToken = linkData?.properties?.hashed_token;
+  if (!hashedToken) {
+    throw new Error("Failed to generate invitation token");
+  }
+
+  // Create user record if it was created
+  if (linkData.user) {
+    const { error: userError } = await supabase
+      .from("users")
+      .insert({
+        id: linkData.user.id,
+        email: invitation.email,
+        role: invitation.role,
+        agency_id: invitation.agency_id,
+        onboarding_completed: false,
+      });
+
+    if (userError) {
+      console.error("Error creating user record:", userError);
+    }
+
+    // Create agency_users relationship
+    const { error: agencyUserError } = await supabase
+      .from("agency_users")
+      .insert({
+        user_id: linkData.user.id,
+        agency_id: invitation.agency_id,
+        role: invitation.role,
+      });
+
+    if (agencyUserError) {
+      console.error("Error creating agency_users record:", agencyUserError);
+    }
+  }
+
+  // Update the invitation with the new token and expiration
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
   const { error } = await supabase
     .from("team_invitations")
     .update({
-      token,
+      token: hashedToken,
       expires_at: expiresAt.toISOString(),
-      status: "pending", // Reset status to pending when resending
+      status: "pending",
     })
     .eq("id", invitationId);
 
   if (error) {
-    throw new Error("Failed to resend invitation");
+    throw new Error("Failed to update invitation");
   }
 
   // Get agency name for the email
@@ -344,13 +506,16 @@ export async function resendInvitation(invitationId: string) {
     .eq("id", invitation.agency_id)
     .single();
 
-  // Send invitation email
-  const emailResult = await sendInvitationEmail({
+  // Build the invite URL with the new auth code
+  const inviteUrl = `${origin}/accept-invite?code=${hashedToken}&facility=${invitation.agency_id}&email=${encodeURIComponent(invitation.email)}`;
+
+  // Send invitation email with the new link
+  const emailResult = await sendInvitationEmailWithUrl({
     email: invitation.email,
-    token,
     inviterName: invitation.invited_by_name || "A team member",
     agencyName: agencyData?.name || "the organization",
     role: invitation.role,
+    inviteUrl,
   });
 
   if (!emailResult.success) {
@@ -361,6 +526,48 @@ export async function resendInvitation(invitationId: string) {
 
   revalidatePath("/admin/team-management");
   return { success: true, emailSent: emailResult.success };
+}
+
+// Helper function to send invitation email with a specific URL
+async function sendInvitationEmailWithUrl(params: {
+  email: string;
+  inviterName: string;
+  agencyName: string;
+  role: string;
+  inviteUrl: string;
+}) {
+  const supabase = await createClient();
+  
+  const roleLabel = params.role === 'agency_admin' ? 'Administrator' : 'Staff Member';
+  
+  const { data, error } = await supabase.functions.invoke('supabase-functions-send-email', {
+    body: {
+      to: params.email,
+      subject: `${params.inviterName} invited you to join ${params.agencyName}`,
+      htmlContent: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #2D2D2D;">You're Invited!</h1>
+          <p style="color: #2D2D2D; font-size: 16px;">
+            <strong>${params.inviterName}</strong> has invited you to join <strong>${params.agencyName}</strong> as a <strong>${roleLabel}</strong>.
+          </p>
+          <p style="color: #2D2D2D; font-size: 16px;">Click the button below to accept your invitation:</p>
+          <p style="margin: 24px 0;">
+            <a href="${params.inviteUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Accept Invitation</a>
+          </p>
+          <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+          <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${params.inviteUrl}</p>
+          <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 24 hours. If it expires, you can request a new invitation.</p>
+        </div>
+      `,
+    },
+  });
+
+  if (error) {
+    console.error('Error sending invitation email:', error);
+    return { success: false, error };
+  }
+
+  return { success: true, data };
 }
 
 // Cancel invitation
