@@ -584,34 +584,45 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
   const origin = getSiteUrl();
   const results = [];
   
+  // Get facility name for the email
+  const { data: facility } = await supabase
+    .from("agencies")
+    .select("name")
+    .eq("id", facilityId)
+    .single();
+  
+  const agencyName = facility?.name || "the agency";
+  
   for (const staff of staffMembers) {
     try {
-      // Create user with Admin API
-      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
-        staff.email,
-        {
+      // Use generateLink instead of inviteUserByEmail to get the token
+      // This allows us to send the email ourselves with the correct URL
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "invite",
+        email: staff.email,
+        options: {
           data: {
             full_name: staff.name,
             role: staff.role,
             agency_id: facilityId,
             needs_password_setup: true,
           },
-          redirectTo: `${origin}/auth/callback?facility=${facilityId}`,
-        }
-      );
+          redirectTo: `${origin}/accept-invite?facility=${facilityId}`,
+        },
+      });
 
-      if (authError) {
-        console.error(`Error inviting ${staff.email}:`, authError);
-        results.push({ email: staff.email, success: false, error: authError.message });
+      if (linkError) {
+        console.error(`Error generating invite link for ${staff.email}:`, linkError);
+        results.push({ email: staff.email, success: false, error: linkError.message });
         continue;
       }
 
       // Create user record in users table
-      if (authData.user) {
+      if (linkData.user) {
         const { error: userError } = await supabase
           .from("users")
           .insert({
-            id: authData.user.id,
+            id: linkData.user.id,
             email: staff.email,
             full_name: staff.name,
             role: staff.role,
@@ -627,7 +638,7 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
         const { error: agencyUserError } = await supabase
           .from("agency_users")
           .insert({
-            user_id: authData.user.id,
+            user_id: linkData.user.id,
             agency_id: facilityId,
             role: staff.role,
           });
@@ -635,6 +646,38 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
         if (agencyUserError) {
           console.error(`Error creating agency_users record for ${staff.email}:`, agencyUserError);
         }
+      }
+
+      // Extract the hashed_token from the generated link
+      const hashedToken = linkData.properties?.hashed_token;
+      
+      if (!hashedToken) {
+        console.error(`No hashed_token in link data for ${staff.email}`);
+        results.push({ email: staff.email, success: false, error: "Failed to generate invite token" });
+        continue;
+      }
+
+      // Build the invite URL with our custom domain
+      const inviteUrl = `${origin}/accept-invite?code=${hashedToken}&facility=${facilityId}&email=${encodeURIComponent(staff.email)}`;
+      
+      // Send the email using our edge function
+      const { error: emailError } = await supabase.functions.invoke('supabase-functions-send-email', {
+        body: {
+          to: staff.email,
+          subject: `You're invited to join ${agencyName}`,
+          htmlContent: generateStaffInviteEmail({
+            staffName: staff.name,
+            agencyName,
+            role: staff.role,
+            inviteUrl,
+          }),
+        },
+      });
+
+      if (emailError) {
+        console.error(`Error sending invite email to ${staff.email}:`, emailError);
+        results.push({ email: staff.email, success: false, error: "Failed to send invite email" });
+        continue;
       }
 
       results.push({ email: staff.email, success: true });
@@ -645,4 +688,61 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
   }
 
   return { results };
+}
+
+function generateStaffInviteEmail({ staffName, agencyName, role, inviteUrl }: { staffName: string; agencyName: string; role: string; inviteUrl: string }) {
+  const roleLabel = role === 'agency_admin' ? 'Administrator' : 'Staff Member';
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You're Invited!</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #FAF8F5; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #FAF8F5;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);">
+          <tr>
+            <td style="padding: 48px 40px;">
+              <h1 style="color: #2D2D2D; font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 600; margin: 0 0 24px; text-align: center;">
+                You're Invited!
+              </h1>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                Hello${staffName ? ` ${staffName}` : ''},
+              </p>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                You've been invited to join <strong>${agencyName}</strong> as a <strong>${roleLabel}</strong> on our Family Communication Portal.
+              </p>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
+                Click the button below to accept your invitation and set up your account:
+              </p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center; padding: 16px 0;">
+                    <a href="${inviteUrl}" style="display: inline-block; background-color: #7A9B8E; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px;">
+                      Accept Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #6B6B6B; font-size: 14px; line-height: 1.6; margin: 32px 0 0; text-align: center;">
+                This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+              </p>
+              <p style="color: #6B6B6B; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center; word-break: break-all;">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                <a href="${inviteUrl}" style="color: #7A9B8E;">${inviteUrl}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
 }

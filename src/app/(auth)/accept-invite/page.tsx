@@ -39,12 +39,16 @@ function AcceptInviteContent() {
 
   const token = searchParams.get("token");
   const email = searchParams.get("email");
+  const authCode = searchParams.get("code"); // OTP code from generateLink
+  const facilityId = searchParams.get("facility");
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [authVerified, setAuthVerified] = useState(false);
+  const [authUser, setAuthUser] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -56,9 +60,89 @@ function AcceptInviteContent() {
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
 
-  // Validate invitation on mount
+  // Handle OTP verification for generateLink flow
+  useEffect(() => {
+    async function verifyAuthCode() {
+      if (!authCode) {
+        setAuthVerified(true);
+        return;
+      }
+
+      try {
+        // Try invite type first, then magiclink
+        let result = await supabase.auth.verifyOtp({
+          token_hash: authCode,
+          type: "invite",
+        });
+
+        if (result.error) {
+          result = await supabase.auth.verifyOtp({
+            token_hash: authCode,
+            type: "magiclink",
+          });
+        }
+
+        if (result.error) {
+          console.error("Error verifying OTP:", result.error);
+          setError("Invalid or expired invitation link. Please request a new invitation.");
+          setLoading(false);
+          return;
+        }
+
+        // Wait for session to be established
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Get the user from the session
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          setAuthUser(user);
+          // Pre-fill form with user metadata
+          setFormData(prev => ({
+            ...prev,
+            fullName: user.user_metadata?.full_name || "",
+          }));
+          
+          // Create a synthetic invitation object from user metadata
+          const agencyId = user.user_metadata?.agency_id || facilityId;
+          
+          // Get agency name
+          const { data: agency } = await supabase
+            .from("agencies")
+            .select("name")
+            .eq("id", agencyId)
+            .single();
+          
+          setInvitation({
+            id: "auth-flow",
+            email: user.email || email || "",
+            role: user.user_metadata?.role || "agency_staff",
+            agency_id: agencyId,
+            invited_by_name: "Administrator",
+            status: "pending",
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            agency: agency ? { name: agency.name } : undefined,
+          });
+        }
+
+        setAuthVerified(true);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error in auth verification:", err);
+        setError("An error occurred while verifying your invitation.");
+        setLoading(false);
+      }
+    }
+
+    verifyAuthCode();
+  }, [authCode, facilityId, email, supabase]);
+
+  // Validate invitation on mount (for token-based flow)
   useEffect(() => {
     async function validateInvitation() {
+      // Skip if using auth code flow
+      if (authCode) return;
+      
       if (!token || !email) {
         setError("Invalid invitation link. Please check your email for the correct link.");
         setLoading(false);
@@ -105,7 +189,7 @@ function AcceptInviteContent() {
     }
 
     validateInvitation();
-  }, [token, email, supabase]);
+  }, [token, email, authCode, supabase]);
 
   const handleNext = () => {
     if (step === 1) {
@@ -157,36 +241,60 @@ function AcceptInviteContent() {
     setSubmitting(true);
 
     try {
-      // 1. Create the user account
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: invitation.email,
-        password: formData.password,
-        options: {
+      let userId: string;
+
+      // Check if user is already authenticated (auth code flow)
+      if (authUser) {
+        userId = authUser.id;
+        
+        // Update the user's password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: formData.password,
           data: {
             full_name: formData.fullName,
-            agency_id: invitation.agency_id,
-            role: invitation.role,
+            needs_password_setup: false,
           },
-        },
-      });
+        });
 
-      if (signUpError) {
-        throw new Error(signUpError.message);
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+      } else {
+        // Token-based flow: Create the user account
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
+          email: invitation.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.fullName,
+              agency_id: invitation.agency_id,
+              role: invitation.role,
+            },
+          },
+        });
+
+        if (signUpError) {
+          throw new Error(signUpError.message);
+        }
+
+        if (!authData.user) {
+          throw new Error("Failed to create account");
+        }
+
+        userId = authData.user.id;
       }
 
-      if (!authData.user) {
-        throw new Error("Failed to create account");
+      // 2. Update the invitation status (only for token-based flow)
+      if (invitation.id !== "auth-flow") {
+        await supabase
+          .from("team_invitations")
+          .update({ status: "accepted" })
+          .eq("id", invitation.id);
       }
-
-      // 2. Update the invitation status
-      await supabase
-        .from("team_invitations")
-        .update({ status: "accepted" })
-        .eq("id", invitation.id);
 
       // 3. Create/update user record
       await supabase.from("users").upsert({
-        id: authData.user.id,
+        id: userId,
         email: invitation.email,
         full_name: formData.fullName,
         phone: formData.phone || null,
@@ -195,15 +303,15 @@ function AcceptInviteContent() {
         onboarding_completed: true,
       });
 
-      // 4. Add to agency_users
-      await supabase.from("agency_users").insert({
-        user_id: authData.user.id,
+      // 4. Add to agency_users (upsert to handle existing records from invite flow)
+      await supabase.from("agency_users").upsert({
+        user_id: userId,
         agency_id: invitation.agency_id,
         role: invitation.role,
-      });
+      }, { onConflict: 'user_id,agency_id' });
 
       toast({
-        title: "Account created!",
+        title: authUser ? "Account setup complete!" : "Account created!",
         description: "Welcome to the team. Redirecting to your dashboard...",
       });
 
