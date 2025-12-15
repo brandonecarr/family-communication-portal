@@ -657,6 +657,27 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
         continue;
       }
 
+      // Create a record in team_invitations table for tracking
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
+      
+      const { error: invitationError } = await supabase
+        .from("team_invitations")
+        .insert({
+          email: staff.email,
+          role: staff.role,
+          agency_id: facilityId,
+          token: hashedToken,
+          status: "pending",
+          expires_at: expiresAt.toISOString(),
+          invited_by_name: agencyName, // Using agency name as inviter
+        });
+
+      if (invitationError) {
+        console.error(`Error creating team_invitations record for ${staff.email}:`, invitationError);
+        // Continue anyway - the user record is created
+      }
+
       // Build the invite URL with our custom domain
       const inviteUrl = `${origin}/accept-invite?code=${hashedToken}&facility=${facilityId}&email=${encodeURIComponent(staff.email)}`;
       

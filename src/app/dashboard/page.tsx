@@ -18,7 +18,7 @@ export default async function Dashboard() {
   const { data: userData } = await supabase
     .from("users")
     .select("role")
-    .eq("user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   const role = userData?.role || user.user_metadata?.role;

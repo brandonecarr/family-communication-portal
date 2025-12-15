@@ -284,12 +284,21 @@ function AcceptInviteContent() {
         userId = authData.user.id;
       }
 
-      // 2. Update the invitation status (only for token-based flow)
+      // 2. Update the invitation status
       if (invitation.id !== "auth-flow") {
+        // Token-based flow: update by invitation id
         await supabase
           .from("team_invitations")
           .update({ status: "accepted" })
           .eq("id", invitation.id);
+      } else {
+        // Auth code flow: update by email and agency_id
+        await supabase
+          .from("team_invitations")
+          .update({ status: "accepted" })
+          .eq("email", invitation.email)
+          .eq("agency_id", invitation.agency_id)
+          .eq("status", "pending");
       }
 
       // 3. Create/update user record
