@@ -164,11 +164,15 @@ export async function getMessageThreads(
   if (allParticipantUserIds.length > 0) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, full_name, email, avatar_url, role")
+      .select("id, full_name, name, email, avatar_url, role")
       .in("id", allParticipantUserIds);
     
     if (users) {
-      participantUsers = users;
+      // Normalize full_name to use name as fallback
+      participantUsers = users.map((u: any) => ({
+        ...u,
+        full_name: u.full_name || u.name || null,
+      }));
     }
   }
 
@@ -249,11 +253,15 @@ export async function getThreadWithMessages(threadId: string) {
   if (participantUserIds.length > 0) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, full_name, email, avatar_url, role")
+      .select("id, full_name, name, email, avatar_url, role")
       .in("id", participantUserIds);
     
     if (users) {
-      participantUsers = users;
+      // Normalize full_name to use name as fallback
+      participantUsers = users.map((u: any) => ({
+        ...u,
+        full_name: u.full_name || u.name || null,
+      }));
     }
   }
 
@@ -279,11 +287,15 @@ export async function getThreadWithMessages(threadId: string) {
   if (senderIds.length > 0) {
     const { data: users } = await supabase
       .from("users")
-      .select("id, full_name, email, avatar_url")
+      .select("id, full_name, name, email, avatar_url")
       .in("id", senderIds);
     
     if (users) {
-      senderUsers = users;
+      // Normalize full_name to use name as fallback
+      senderUsers = users.map((u: any) => ({
+        ...u,
+        full_name: u.full_name || u.name || null,
+      }));
     }
   }
 
