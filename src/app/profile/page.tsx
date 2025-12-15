@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCircle, Mail, Globe, Shield, Loader2 } from "lucide-react";
+import { UserCircle, Mail, Globe, Shield, Loader2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 export const dynamic = 'force-dynamic';
@@ -192,6 +192,16 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] py-8">
       <div className="container mx-auto px-4 max-w-4xl">
+        {/* Back to Dashboard Button */}
+        <Button
+          variant="ghost"
+          className="mb-6 -ml-2 text-[#2D2D2D] hover:text-[#7A9B8E] hover:bg-transparent"
+          onClick={() => router.push('/dashboard')}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Dashboard
+        </Button>
+
         <div className="mb-8">
           <h1 className="text-4xl font-light mb-2" style={{ fontFamily: 'Fraunces, serif' }}>
             Profile Settings
