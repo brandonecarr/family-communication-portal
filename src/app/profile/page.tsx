@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCircle, Mail, Globe, Shield } from "lucide-react";
+import { UserCircle, Mail, Globe, Shield, Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +19,14 @@ export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [language, setLanguage] = useState("en");
+  const [originalName, setOriginalName] = useState("");
+  const [originalPhone, setOriginalPhone] = useState("");
+  const [originalLanguage, setOriginalLanguage] = useState("en");
+  const [saving, setSaving] = useState(false);
   const [supabase, setSupabase] = useState<any>(null);
   const router = useRouter();
+  const { toast } = useToast();
 
   // Initialize Supabase client only on the client side
   useEffect(() => {
@@ -85,16 +92,98 @@ export default function ProfilePage() {
       // Set name from users table (full_name or name) or family_members table or user metadata
       const displayName = usersData?.full_name || usersData?.name || profileData?.name || user.user_metadata?.full_name || "";
       setName(displayName);
+      setOriginalName(displayName);
       
       // Set phone from family_members table or user metadata
       const displayPhone = profileData?.phone || user.user_metadata?.phone || "";
       setPhone(displayPhone);
+      setOriginalPhone(displayPhone);
+      
+      // Set language
+      const displayLanguage = profileData?.preferred_language || "en";
+      setLanguage(displayLanguage);
+      setOriginalLanguage(displayLanguage);
       
       console.log("Profile data loaded:", { usersData, profileData, displayName, displayPhone, userMetadata: user.user_metadata });
     };
 
     fetchProfile();
   }, [supabase, router]);
+
+  const hasChanges = name !== originalName || phone !== originalPhone || language !== originalLanguage;
+
+  const handleSave = async () => {
+    if (!supabase || !user) return;
+    
+    setSaving(true);
+    try {
+      // Update users table
+      const { error: usersError } = await supabase
+        .from("users")
+        .update({ 
+          full_name: name,
+          name: name,
+        })
+        .eq("id", user.id);
+
+      if (usersError) {
+        console.error("Error updating users table:", usersError);
+      }
+
+      // Update user metadata
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: { 
+          full_name: name,
+          phone: phone,
+        }
+      });
+
+      if (metadataError) {
+        console.error("Error updating user metadata:", metadataError);
+        throw metadataError;
+      }
+
+      // If user has a family_members record, update it too
+      if (profile) {
+        const { error: profileError } = await supabase
+          .from("family_members")
+          .update({ 
+            name: name,
+            phone: phone,
+            preferred_language: language,
+          })
+          .eq("user_id", user.id);
+
+        if (profileError) {
+          console.error("Error updating family_members:", profileError);
+        }
+      }
+
+      // Update original values
+      setOriginalName(name);
+      setOriginalPhone(phone);
+      setOriginalLanguage(language);
+
+      toast({
+        title: "Profile updated",
+        description: "Your profile settings have been saved successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error saving profile",
+        description: error.message || "An error occurred while saving your profile.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setName(originalName);
+    setPhone(originalPhone);
+    setLanguage(originalLanguage);
+  };
 
   if (!user) {
     return null;
@@ -189,7 +278,7 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="language">Preferred Language</Label>
-                <Select defaultValue={profile?.preferred_language || "en"}>
+                <Select value={language} onValueChange={setLanguage}>
                   <SelectTrigger id="language">
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
@@ -250,13 +339,24 @@ export default function ProfilePage() {
             <Button 
               size="lg"
               className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full px-8"
+              onClick={handleSave}
+              disabled={saving || !hasChanges}
             >
-              Save Changes
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
             <Button 
               variant="outline" 
               size="lg"
               className="rounded-full px-8"
+              onClick={handleCancel}
+              disabled={saving || !hasChanges}
             >
               Cancel
             </Button>
