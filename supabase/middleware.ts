@@ -72,7 +72,22 @@ export const updateSession = async (request: NextRequest) => {
       }
     );
 
-    const { error } = await supabase.auth.getUser();
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    // If there's a JWT error, clear the session cookies to force re-auth
+    if (error && (error.message.includes("JWT") || error.message.includes("token"))) {
+      console.warn("Invalid JWT token detected, clearing session");
+      // Clear auth cookies
+      response.cookies.delete("sb-access-token");
+      response.cookies.delete("sb-refresh-token");
+      
+      // Get all cookies that start with "sb-" and delete them
+      request.cookies.getAll().forEach((cookie) => {
+        if (cookie.name.startsWith("sb-")) {
+          response.cookies.delete(cookie.name);
+        }
+      });
+    }
 
     // protected routes
     if (request.nextUrl.pathname.startsWith("/dashboard") && error) {
@@ -81,6 +96,8 @@ export const updateSession = async (request: NextRequest) => {
 
     return response;
   } catch (e) {
+    // If there's any error during auth check, return the response without blocking
+    console.warn("Auth check error in middleware:", e);
     return response;
   }
 };
