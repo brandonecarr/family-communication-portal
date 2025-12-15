@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MessageSquare, Clock, AlertCircle, User } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { MessageSquare, Clock, AlertCircle, User, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,109 +10,250 @@ import { createClient } from "../../../supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
-interface Message {
+interface ThreadMessage {
   id: string;
-  patient_id: string;
+  thread_id: string;
   body: string;
-  priority: string;
   created_at: string;
-  assigned_to?: string;
-  status: string;
-  patient: {
-    name: string;
-  };
-  assigned_staff?: {
-    name: string;
+  sender: {
+    full_name: string | null;
+    name: string | null;
+    email: string;
   };
 }
 
+interface MessageThread {
+  id: string;
+  subject: string | null;
+  category: string;
+  last_message_at: string;
+  created_at: string;
+  is_group: boolean;
+  unread_count: number;
+  last_message: ThreadMessage | null;
+}
+
 export default function MessageQueue() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [threads, setThreads] = useState<MessageThread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const supabase = createClient();
+  const retryCount = useRef(0);
+  const maxRetries = 3;
+
+  const fetchThreads = useCallback(async () => {
+    try {
+      setError(null);
+      // Get current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        // Silently handle auth errors - user might not be logged in yet
+        setLoading(false);
+        return;
+      }
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Get threads where user is a participant
+      const { data: participantThreads, error: threadsError } = await supabase
+        .from("thread_participants")
+        .select("thread_id, last_read_at")
+        .eq("user_id", user.id);
+
+      if (threadsError) {
+        console.error("Error fetching participant threads:", threadsError);
+        setLoading(false);
+        return;
+      }
+
+      if (!participantThreads || participantThreads.length === 0) {
+        setThreads([]);
+        setLoading(false);
+        return;
+      }
+
+      const threadIds = participantThreads.map(pt => pt.thread_id);
+
+      // Get thread details with last message
+      const { data: threadsData, error: detailsError } = await supabase
+        .from("message_threads")
+        .select(`
+          id,
+          subject,
+          category,
+          last_message_at,
+          created_at,
+          is_group,
+          archived_at
+        `)
+        .in("id", threadIds)
+        .is("archived_at", null)
+        .order("last_message_at", { ascending: false })
+        .limit(5);
+
+      if (detailsError) {
+        console.error("Error fetching thread details:", detailsError);
+        setLoading(false);
+        return;
+      }
+
+      if (!threadsData) {
+        setThreads([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get last message for each thread
+      const threadsWithMessages = await Promise.all(
+        threadsData.map(async (thread) => {
+          const participant = participantThreads.find(pt => pt.thread_id === thread.id);
+          
+          // Get last message
+          const { data: lastMessage } = await supabase
+            .from("thread_messages")
+            .select(`
+              id,
+              thread_id,
+              body,
+              created_at,
+              sender:sender_id (
+                full_name,
+                name,
+                email
+              )
+            `)
+            .eq("thread_id", thread.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          // Count unread messages
+          const { count: unreadCount } = await supabase
+            .from("thread_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("thread_id", thread.id)
+            .gt("created_at", participant?.last_read_at || "1970-01-01");
+
+          return {
+            ...thread,
+            last_message: lastMessage,
+            unread_count: unreadCount || 0,
+          };
+        })
+      );
+
+      setThreads(threadsWithMessages);
+      retryCount.current = 0; // Reset retry count on success
+    } catch (error: any) {
+      // Handle network errors silently with retry
+      if (error?.message?.includes("Load failed") || error?.message?.includes("fetch")) {
+        if (retryCount.current < maxRetries) {
+          retryCount.current += 1;
+          // Retry after a short delay
+          setTimeout(fetchThreads, 1000 * retryCount.current);
+          return;
+        }
+        setError("Unable to load messages. Please check your connection.");
+      } else {
+        console.error("Error in fetchThreads:", error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
 
   useEffect(() => {
-    fetchMessages();
+    fetchThreads();
 
-    // Subscribe to real-time updates
-    const channel = supabase
-      .channel("message-queue")
+    // Subscribe to real-time updates for new messages
+    const messagesChannel = supabase
+      .channel("message-queue-messages")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "messages",
+          table: "thread_messages",
         },
         () => {
-          fetchMessages();
+          fetchThreads();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to real-time updates for new threads
+    const threadsChannel = supabase
+      .channel("message-queue-threads")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_threads",
+        },
+        () => {
+          fetchThreads();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(threadsChannel);
     };
-  }, []);
+  }, [fetchThreads]);
 
-  const fetchMessages = async () => {
-    const { data, error } = await supabase
-      .from("messages")
-      .select(`
-        *,
-        patient:patients!patient_id (
-          name
-        )
-      `)
-      .in("status", ["sent", "delivered"])
-      .order("created_at", { ascending: false })
-      .limit(5);
-    
-    if (error) {
-      console.error("Error fetching messages:", error);
-    }
-
-    if (data) {
-      setMessages(data);
-    }
-    setLoading(false);
-  };
-
-  const handleAssign = async (messageId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("messages")
-        .update({
-          assigned_to: user.id,
-          status: "delivered",
-        })
-        .eq("id", messageId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Message assigned",
-        description: "You have been assigned to this message",
-      });
-
-      fetchMessages();
-    } catch (error) {
-      console.error("Error assigning message:", error);
-      toast({
-        title: "Error",
-        description: "Failed to assign message",
-        variant: "destructive",
-      });
-    }
-  };
 
   if (loading) {
-    return <div className="text-center py-8">Loading messages...</div>;
+    return (
+      <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl font-light" style={{ fontFamily: 'Fraunces, serif' }}>
+            <MessageSquare className="h-5 w-5 text-[#7A9B8E]" />
+            Message Queue
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">Loading messages...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xl font-light" style={{ fontFamily: 'Fraunces, serif' }}>
+              <MessageSquare className="h-5 w-5 text-[#7A9B8E]" />
+              Message Queue
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => {
+                retryCount.current = 0;
+                setLoading(true);
+                fetchThreads();
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -129,50 +270,60 @@ export default function MessageQueue() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {messages.length === 0 ? (
+        {threads.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            No unread messages
+            No recent messages
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className="p-4 rounded-xl border bg-card hover:bg-[#7A9B8E]/5 transition-colors"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h4 className="font-semibold text-sm">{message.patient?.name || "Unknown Patient"}</h4>
-                  <p className="text-sm text-muted-foreground line-clamp-1">{message.body}</p>
-                </div>
-                {message.priority === "high" && (
-                  <Badge variant="destructive" className="gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Urgent
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                </span>
-                {message.status === "sent" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs rounded-full"
-                    onClick={() => handleAssign(message.id)}
+          threads.map((thread) => (
+            <Link key={thread.id} href="/admin/messages">
+              <div
+                className="p-4 rounded-xl border bg-card hover:bg-[#7A9B8E]/5 transition-colors cursor-pointer"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-sm truncate">
+                        {thread.subject || "No Subject"}
+                      </h4>
+                      {thread.unread_count > 0 && (
+                        <Badge variant="default" className="bg-[#7A9B8E] text-white text-xs px-2 py-0">
+                          {thread.unread_count}
+                        </Badge>
+                      )}
+                    </div>
+                    {thread.last_message && (
+                      <p className="text-sm text-muted-foreground line-clamp-1">
+                        <span className="font-medium">
+                          {thread.last_message.sender?.full_name || 
+                           thread.last_message.sender?.name || 
+                           thread.last_message.sender?.email}:
+                        </span>{" "}
+                        {thread.last_message.body}
+                      </p>
+                    )}
+                  </div>
+                  <Badge 
+                    variant="outline" 
+                    className="ml-2 capitalize text-xs"
                   >
-                    Assign to Me
-                  </Button>
-                ) : (
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {message.assigned_staff?.name || "Assigned"}
+                    {thread.category}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {formatDistanceToNow(new Date(thread.last_message_at), { addSuffix: true })}
                   </span>
-                )}
+                  {thread.is_group && (
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      Group
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </CardContent>

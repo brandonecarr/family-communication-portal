@@ -1108,6 +1108,7 @@ export type Database = {
           name: string | null
           needs_password_setup: boolean | null
           onboarding_completed: boolean | null
+          phone: string | null
           role: string | null
           token_identifier: string
           updated_at: string | null
@@ -1123,6 +1124,7 @@ export type Database = {
           name?: string | null
           needs_password_setup?: boolean | null
           onboarding_completed?: boolean | null
+          phone?: string | null
           role?: string | null
           token_identifier: string
           updated_at?: string | null
@@ -1138,6 +1140,7 @@ export type Database = {
           name?: string | null
           needs_password_setup?: boolean | null
           onboarding_completed?: boolean | null
+          phone?: string | null
           role?: string | null
           token_identifier?: string
           updated_at?: string | null

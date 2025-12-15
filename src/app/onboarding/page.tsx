@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Globe, User, Heart } from "lucide-react";
+import { createClient } from "../../../supabase/client";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [supabase, setSupabase] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -22,6 +25,10 @@ export default function OnboardingPage() {
 
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
+
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
 
   const formatPhoneNumber = (value: string) => {
     // Remove all non-numeric characters
@@ -42,17 +49,72 @@ export default function OnboardingPage() {
     setFormData({ ...formData, phone: formatted });
   };
 
-  const handleNext = () => {
-    if (step < totalSteps) {
-      setStep(step + 1);
-    } else {
-      // Complete onboarding
+  const saveOnboardingData = async () => {
+    if (!supabase) return;
+    
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push("/sign-in");
+        return;
+      }
+
+      // Update users table with full_name and phone
+      await supabase
+        .from("users")
+        .update({ 
+          full_name: formData.name,
+          name: formData.name,
+          phone: formData.phone,
+          onboarding_completed: true 
+        })
+        .eq("id", user.id);
+
+      // Update family_members table with name, phone, relationship, and language
+      const { data: familyMember } = await supabase
+        .from("family_members")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (familyMember) {
+        await supabase
+          .from("family_members")
+          .update({
+            name: formData.name,
+            phone: formData.phone,
+            relationship: formData.relationship,
+            preferred_language: formData.language,
+          })
+          .eq("user_id", user.id);
+      }
+
       router.push("/family");
+    } catch (error) {
+      console.error("Error saving onboarding data:", error);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSkip = () => {
-    router.push("/family");
+  const handleNext = async () => {
+    if (step < totalSteps) {
+      setStep(step + 1);
+    } else {
+      // Complete onboarding - save data to database
+      await saveOnboardingData();
+    }
+  };
+
+  const handleSkip = async () => {
+    // Still save any data that was entered
+    if (formData.name || formData.phone) {
+      await saveOnboardingData();
+    } else {
+      router.push("/family");
+    }
   };
 
   return (
@@ -246,9 +308,9 @@ export default function OnboardingPage() {
                 <Button
                   onClick={handleNext}
                   className="flex-1 h-12 bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full"
-                  disabled={!formData.relationship}
+                  disabled={!formData.relationship || saving}
                 >
-                  Get Started
+                  {saving ? "Saving..." : "Get Started"}
                 </Button>
               </div>
             </CardContent>

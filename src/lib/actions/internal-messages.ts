@@ -543,7 +543,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
 
       const { data: users, error: usersError } = await supabase
         .from("users")
-        .select("id, full_name, email, avatar_url")
+        .select("id, full_name, name, email, avatar_url")
         .in("id", userIds);
 
       if (usersError) {
@@ -557,7 +557,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
         const userData: any = usersMap.get(su.user_id) || {};
         return {
           id: su.user_id,
-          full_name: userData.full_name || null,
+          full_name: userData.full_name || userData.name || null,
           email: userData.email || null,
           avatar_url: userData.avatar_url || null,
           role: su.role,
@@ -583,7 +583,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
       if (staffUserIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from("users")
-          .select("id, full_name, email, avatar_url")
+          .select("id, full_name, name, email, avatar_url")
           .in("id", staffUserIds);
 
         if (!usersError && users) {
@@ -597,7 +597,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
         const userData = staffUsersMap.get(au.user_id) || {};
         return {
           id: au.user_id,
-          full_name: userData.full_name || null,
+          full_name: userData.full_name || userData.name || null,
           email: userData.email || null,
           avatar_url: userData.avatar_url || null,
           role: au.role,

@@ -43,7 +43,7 @@ export default function HomePage({
           </h1>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A secure, non-clinical communication platform that keeps families informed and engaged throughout their hospice journey.
+            A secure, non-clinical communication platform that keeps families informed and engaged throughout their home health journey.
           </p>
 
           <div className="flex items-center justify-center gap-4 pt-4">

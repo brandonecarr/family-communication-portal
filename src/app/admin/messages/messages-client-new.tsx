@@ -884,7 +884,7 @@ export default function MessagesClientNew({
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
-                            {recipient.full_name || recipient.email}
+                            {recipient.full_name || recipient.email || "Unknown User"}
                           </p>
                           <p className="text-xs text-muted-foreground capitalize">
                             {recipient.role?.replace("_", " ")}

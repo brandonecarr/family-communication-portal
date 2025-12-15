@@ -14,7 +14,9 @@ export const dynamic = 'force-dynamic';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
+  const [userData, setUserData] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [supabase, setSupabase] = useState<any>(null);
   const router = useRouter();
@@ -54,6 +56,16 @@ export default function ProfilePage() {
 
       setUser(user);
 
+      // Fetch from users table for name, phone, and role
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("full_name, name, phone, role")
+        .eq("id", user.id)
+        .single();
+
+      setUserData(usersData);
+
+      // Fetch from family_members table for additional profile data
       const { data: profileData } = await supabase
         .from("family_members")
         .select("*")
@@ -61,7 +73,16 @@ export default function ProfilePage() {
         .single();
 
       setProfile(profileData);
-      setPhone(profileData?.phone || "");
+      
+      // Set name from users table (full_name or name) or family_members table
+      const displayName = usersData?.full_name || usersData?.name || profileData?.name || "";
+      setName(displayName);
+      
+      // Set phone from users table first, then fall back to family_members table
+      const displayPhone = usersData?.phone || profileData?.phone || "";
+      setPhone(displayPhone);
+      
+      console.log("Profile data loaded:", { usersData, profileData, displayName, displayPhone });
     };
 
     fetchProfile();
@@ -122,7 +143,8 @@ export default function ProfilePage() {
                 <Input
                   id="name"
                   type="text"
-                  defaultValue={profile?.name || ""}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   placeholder="Enter your full name"
                 />
               </div>
@@ -199,7 +221,7 @@ export default function ProfilePage() {
                 <Label>Current Role</Label>
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-full bg-[#7A9B8E]/10 text-[#7A9B8E] text-sm font-medium">
-                    {profile?.role?.replace('_', ' ').toUpperCase() || 'FAMILY MEMBER'}
+                    {userData?.role?.replace('_', ' ').toUpperCase() || 'FAMILY MEMBER'}
                   </div>
                 </div>
               </div>
