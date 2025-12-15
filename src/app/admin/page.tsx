@@ -15,9 +15,28 @@ export default async function AdminDashboard() {
   // Check if user needs to complete onboarding
   const needsPasswordSetup = user.user_metadata?.needs_password_setup;
   const agencyId = user.user_metadata?.agency_id;
+  const userRole = user.user_metadata?.role;
 
+  // Check for pending facility invite
+  const { data: pendingInvite } = await supabase
+    .from("facility_invites")
+    .select("token, agency_id")
+    .eq("email", user.email)
+    .eq("status", "pending")
+    .single();
+
+  if (pendingInvite) {
+    return redirect(`/facility-setup?facility=${pendingInvite.agency_id}&token=${pendingInvite.token}`);
+  }
+
+  // Redirect agency admins who need password setup to facility-setup
+  if (needsPasswordSetup && agencyId && userRole === "agency_admin") {
+    return redirect(`/facility-setup?facility=${agencyId}`);
+  }
+
+  // Redirect staff who need password setup to accept-invite
   if (needsPasswordSetup && agencyId) {
-    return redirect(`/admin/setup?facility=${agencyId}`);
+    return redirect(`/accept-invite?facility=${agencyId}`);
   }
 
   // Check if user has completed onboarding
@@ -36,7 +55,7 @@ export default async function AdminDashboard() {
 
   // If user has agency_id in metadata but not in agency_users, redirect to setup
   if (agencyId && !agencyUser && !userData?.onboarding_completed) {
-    return redirect(`/admin/setup?facility=${agencyId}`);
+    return redirect(`/facility-setup?facility=${agencyId}`);
   }
 
   return (

@@ -14,6 +14,33 @@ export default async function Dashboard() {
     redirect("/sign-in");
   }
 
+  // Check if user needs to complete onboarding (facility setup)
+  const needsPasswordSetup = user.user_metadata?.needs_password_setup;
+  const agencyId = user.user_metadata?.agency_id;
+  const userRole = user.user_metadata?.role;
+
+  // Check for pending facility invite
+  const { data: pendingInvite } = await supabase
+    .from("facility_invites")
+    .select("token, agency_id")
+    .eq("email", user.email)
+    .eq("status", "pending")
+    .single();
+
+  if (pendingInvite) {
+    redirect(`/facility-setup?facility=${pendingInvite.agency_id}&token=${pendingInvite.token}`);
+  }
+
+  // Check if agency admin needs to complete facility setup
+  if (needsPasswordSetup && agencyId && userRole === "agency_admin") {
+    redirect(`/facility-setup?facility=${agencyId}`);
+  }
+
+  // Check if staff needs to complete onboarding
+  if (needsPasswordSetup && agencyId) {
+    redirect(`/accept-invite?facility=${agencyId}`);
+  }
+
   // Check user role from user metadata or users table
   const { data: userData } = await supabase
     .from("users")

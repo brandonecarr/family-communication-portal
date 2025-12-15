@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       const needsPasswordSetup = user.user_metadata?.needs_password_setup;
       const agencyId = user.user_metadata?.agency_id || facility;
       const userEmail = user.email;
+      const userRole = user.user_metadata?.role;
       
       // Check if there's a pending facility invite for this user
       const { data: pendingInvite } = await supabase
@@ -36,14 +37,24 @@ export async function GET(request: Request) {
         return NextResponse.redirect(setupUrl);
       }
       
-      // Fallback: check metadata
-      if (needsPasswordSetup && agencyId) {
+      // Check if user is agency_admin and needs password setup
+      if (needsPasswordSetup && agencyId && userRole === "agency_admin") {
         const setupUrl = new URL("/facility-setup", siteUrl);
         setupUrl.searchParams.set("facility", agencyId);
         if (token) {
           setupUrl.searchParams.set("token", token);
         }
         return NextResponse.redirect(setupUrl);
+      }
+      
+      // Check if user is staff and needs password setup - redirect to accept-invite
+      if (needsPasswordSetup && agencyId && (userRole === "agency_staff" || userRole !== "agency_admin")) {
+        const acceptUrl = new URL("/accept-invite", siteUrl);
+        acceptUrl.searchParams.set("facility", agencyId);
+        if (token) {
+          acceptUrl.searchParams.set("token", token);
+        }
+        return NextResponse.redirect(acceptUrl);
       }
     }
   }

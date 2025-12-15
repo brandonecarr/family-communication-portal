@@ -85,6 +85,8 @@ function AdminSetupContent() {
           
           if (result.error) {
             console.error("Error verifying token:", result.error);
+            // Set error but still allow loadData to run to show the error UI
+            setError("Your invitation link has expired or is invalid. Please request a new invitation.");
           }
           
           // Wait a moment for the session to be fully established
@@ -94,6 +96,7 @@ function AdminSetupContent() {
           setAuthVerified(true);
         } catch (err) {
           console.error("Error verifying token:", err);
+          setError("Your invitation link has expired or is invalid. Please request a new invitation.");
           setAuthVerified(true); // Still allow loadData to run and handle the error
         }
       } else if (!authCode) {
@@ -116,6 +119,13 @@ function AdminSetupContent() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
       if (!currentUser) {
+        // If we had an auth code but no user, the link may have expired
+        if (authCode) {
+          setError("Your invitation link has expired or is invalid. Please request a new invitation.");
+          setLoading(false);
+          return;
+        }
+        // Only redirect to sign-in if there was no auth code at all
         router.push("/sign-in");
         return;
       }
@@ -340,6 +350,39 @@ function AdminSetupContent() {
           <div className="w-8 h-8 border-4 border-[#7A9B8E] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Show error state if there's an error and no user (e.g., expired link)
+  if (error && !user) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-none shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-[#D4876F]/10 flex items-center justify-center">
+              <Lock className="h-8 w-8 text-[#D4876F]" />
+            </div>
+            <CardTitle className="text-2xl" style={{ fontFamily: 'Fraunces, serif' }}>
+              Invitation Expired
+            </CardTitle>
+            <CardDescription className="text-[#D4876F]">
+              {error}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground mb-6">
+              Please contact your administrator to request a new invitation link.
+            </p>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push("/sign-in")}
+              className="w-full"
+            >
+              Go to Sign In
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

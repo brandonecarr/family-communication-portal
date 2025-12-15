@@ -20,9 +20,12 @@ export const updateSession = async (request: NextRequest) => {
   // Use the configured site URL for redirects
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.url;
   
-  // Allow facility-setup page to handle its own auth code verification
-  // Don't interfere with the OTP verification flow
-  if (request.nextUrl.pathname.startsWith("/facility-setup")) {
+  // CRITICAL: Allow facility-setup and accept-invite pages to handle their own auth
+  // These pages handle OTP verification and should NEVER be redirected to sign-in
+  const isSetupPage = request.nextUrl.pathname.startsWith("/facility-setup");
+  const isAcceptInvitePage = request.nextUrl.pathname.startsWith("/accept-invite");
+  
+  if (isSetupPage || isAcceptInvitePage) {
     return response;
   }
   

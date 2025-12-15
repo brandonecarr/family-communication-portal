@@ -115,7 +115,7 @@ export const signInAction = async (formData: FormData) => {
   const password = formData.get("password") as string;
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -126,6 +126,36 @@ export const signInAction = async (formData: FormData) => {
       return encodedRedirect("error", "/sign-in", "Server configuration error. Please contact support.");
     }
     return encodedRedirect("error", "/sign-in", error.message);
+  }
+
+  // Check if user needs to complete onboarding
+  const user = data.user;
+  if (user) {
+    const needsPasswordSetup = user.user_metadata?.needs_password_setup;
+    const agencyId = user.user_metadata?.agency_id;
+    const userRole = user.user_metadata?.role;
+
+    // Check for pending facility invite
+    const { data: pendingInvite } = await supabase
+      .from("facility_invites")
+      .select("token, agency_id")
+      .eq("email", email)
+      .eq("status", "pending")
+      .single();
+
+    if (pendingInvite) {
+      return redirect(`/facility-setup?facility=${pendingInvite.agency_id}&token=${pendingInvite.token}`);
+    }
+
+    // Check if agency admin needs password setup
+    if (needsPasswordSetup && agencyId && userRole === "agency_admin") {
+      return redirect(`/facility-setup?facility=${agencyId}`);
+    }
+
+    // Check if staff needs to complete onboarding
+    if (needsPasswordSetup && agencyId) {
+      return redirect(`/accept-invite?facility=${agencyId}`);
+    }
   }
 
   return redirect("/dashboard");
