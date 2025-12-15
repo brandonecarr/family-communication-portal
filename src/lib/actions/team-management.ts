@@ -12,30 +12,46 @@ async function sendInvitationEmail(params: {
   agencyName: string;
   role: string;
 }) {
-  const supabase = await createClient();
-  
   // Get the base URL from environment
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 
-    (typeof window !== 'undefined' ? window.location.origin : '');
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  const { data, error } = await supabase.functions.invoke('supabase-functions-send-team-invitation', {
-    body: {
-      email: params.email,
-      token: params.token,
-      inviterName: params.inviterName,
-      agencyName: params.agencyName,
-      role: params.role,
-      baseUrl,
-    },
-  });
-
-  if (error) {
-    console.error('Error sending invitation email:', error);
-    // Don't throw - invitation is still created, just email failed
-    return { success: false, error };
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing Supabase URL or anon key');
+    return { success: false, error: 'Missing configuration' };
   }
 
-  return { success: true, data };
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-team-invitation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        email: params.email,
+        token: params.token,
+        inviterName: params.inviterName,
+        agencyName: params.agencyName,
+        role: params.role,
+        baseUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error sending invitation email:', errorText);
+      return { success: false, error: errorText };
+    }
+
+    const data = await response.json();
+    console.log(`[EMAIL] Successfully sent invitation email to ${params.email}`);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error sending invitation email:', error);
+    return { success: false, error };
+  }
 }
 
 // Types
@@ -536,38 +552,57 @@ async function sendInvitationEmailWithUrl(params: {
   role: string;
   inviteUrl: string;
 }) {
-  const supabase = await createClient();
-  
   const roleLabel = params.role === 'agency_admin' ? 'Administrator' : 'Staff Member';
   
-  const { data, error } = await supabase.functions.invoke('supabase-functions-send-email', {
-    body: {
-      to: params.email,
-      subject: `${params.inviterName} invited you to join ${params.agencyName}`,
-      htmlContent: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #2D2D2D;">You're Invited!</h1>
-          <p style="color: #2D2D2D; font-size: 16px;">
-            <strong>${params.inviterName}</strong> has invited you to join <strong>${params.agencyName}</strong> as a <strong>${roleLabel}</strong>.
-          </p>
-          <p style="color: #2D2D2D; font-size: 16px;">Click the button below to accept your invitation:</p>
-          <p style="margin: 24px 0;">
-            <a href="${params.inviteUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Accept Invitation</a>
-          </p>
-          <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-          <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${params.inviteUrl}</p>
-          <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 24 hours. If it expires, you can request a new invitation.</p>
-        </div>
-      `,
-    },
-  });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing Supabase URL or anon key');
+    return { success: false, error: 'Missing configuration' };
+  }
 
-  if (error) {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        to: params.email,
+        subject: `${params.inviterName} invited you to join ${params.agencyName}`,
+        htmlContent: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #2D2D2D;">You're Invited!</h1>
+            <p style="color: #2D2D2D; font-size: 16px;">
+              <strong>${params.inviterName}</strong> has invited you to join <strong>${params.agencyName}</strong> as a <strong>${roleLabel}</strong>.
+            </p>
+            <p style="color: #2D2D2D; font-size: 16px;">Click the button below to accept your invitation:</p>
+            <p style="margin: 24px 0;">
+              <a href="${params.inviteUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Accept Invitation</a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${params.inviteUrl}</p>
+            <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 24 hours. If it expires, you can request a new invitation.</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error sending invitation email:', errorText);
+      return { success: false, error: errorText };
+    }
+
+    const data = await response.json();
+    console.log(`[EMAIL] Successfully sent invitation email to ${params.email}`);
+    return { success: true, data };
+  } catch (error) {
     console.error('Error sending invitation email:', error);
     return { success: false, error };
   }
-
-  return { success: true, data };
 }
 
 // Cancel invitation
