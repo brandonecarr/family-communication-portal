@@ -619,23 +619,24 @@ export async function getAvailableRecipients(category: "internal" | "family") {
       // Get family members
       const { data: familyMembers, error: familyError } = await supabase
         .from("family_members")
-        .select("user_id, name, email, patient_id")
+        .select("user_id, name, email, patient_id, relationship, status")
         .not("user_id", "is", null)
-        .neq("user_id", user.id);
+        .neq("user_id", user.id)
+        .eq("status", "active");
 
       if (familyError) {
         console.error("Error fetching family members:", familyError);
         return staffUsers;
       }
 
-      // Get patients to filter by agency
+      // Get patients to filter by agency and include patient names
       const patientIds = (familyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
       let patientsData: any[] = [];
       
       if (patientIds.length > 0) {
         const { data: patients } = await supabase
           .from("patients")
-          .select("id, agency_id")
+          .select("id, agency_id, first_name, last_name")
           .in("id", patientIds);
         
         if (patients) {
@@ -645,19 +646,25 @@ export async function getAvailableRecipients(category: "internal" | "family") {
 
       const patientsMap = new Map(patientsData.map((p: any) => [p.id, p]));
 
-      // Filter family members by agency
+      // Filter family members by agency and include patient info
       const agencyFamilyMembers = (familyMembers || [])
         .filter((fm: any) => {
           const patient = patientsMap.get(fm.patient_id);
           return patient?.agency_id === agencyId;
         })
-        .map((fm: any) => ({
-          id: fm.user_id,
-          full_name: fm.name,
-          email: fm.email,
-          avatar_url: null,
-          role: "family_member",
-        }));
+        .map((fm: any) => {
+          const patient = patientsMap.get(fm.patient_id);
+          return {
+            id: fm.user_id,
+            full_name: fm.name,
+            email: fm.email,
+            avatar_url: null,
+            role: "family_member",
+            patient_id: fm.patient_id,
+            patient_name: patient ? `${patient.first_name} ${patient.last_name}`.trim() : null,
+            relationship: fm.relationship,
+          };
+        });
 
       return [...staffUsers, ...agencyFamilyMembers];
     }

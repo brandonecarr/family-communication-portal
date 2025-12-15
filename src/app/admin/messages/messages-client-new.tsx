@@ -90,6 +90,7 @@ export default function MessagesClientNew({
   const [newThreadSubject, setNewThreadSubject] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
   const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
+  const [selectedPatientFilter, setSelectedPatientFilter] = useState<string | null>(null);
 
   // Load threads on mount and tab change
   useEffect(() => {
@@ -235,6 +236,11 @@ export default function MessagesClientNew({
     try {
       const recipients = await getAvailableRecipients(activeTab);
       setAvailableRecipients(recipients);
+      setSelectedPatientFilter(null);
+      setRecipientSearchQuery("");
+      setSelectedRecipients([]);
+      setNewThreadSubject("");
+      setInitialMessage("");
       setCreateDialogOpen(true);
     } catch (error) {
       console.error("Error loading recipients:", error);
@@ -303,14 +309,35 @@ export default function MessagesClientNew({
     }
   );
 
-  // Filter recipients by search
+  // Filter recipients by search and patient filter
   const filteredRecipients = availableRecipients.filter((r) => {
+    // For internal conversations, exclude family members
+    if (activeTab === "internal" && r.role === "family_member") {
+      return false;
+    }
+    
+    // Apply patient filter for family members
+    if (selectedPatientFilter && r.role === "family_member") {
+      if (r.patient_id !== selectedPatientFilter) return false;
+    }
+    
     if (!recipientSearchQuery) return true;
     const searchLower = recipientSearchQuery.toLowerCase();
     const name = r.full_name?.toLowerCase() || "";
     const email = r.email?.toLowerCase() || "";
-    return name.includes(searchLower) || email.includes(searchLower);
+    const patientName = r.patient_name?.toLowerCase() || "";
+    return name.includes(searchLower) || email.includes(searchLower) || patientName.includes(searchLower);
   });
+
+  // Get unique patients from family members for the filter dropdown
+  const uniquePatients = availableRecipients
+    .filter((r) => r.role === "family_member" && r.patient_id && r.patient_name)
+    .reduce((acc: { id: string; name: string }[], r) => {
+      if (!acc.find((p) => p.id === r.patient_id)) {
+        acc.push({ id: r.patient_id, name: r.patient_name });
+      }
+      return acc;
+    }, []);
 
   const getThreadDisplayName = (thread: MessageThread) => {
     if (thread.subject) return thread.subject;
@@ -847,6 +874,27 @@ export default function MessagesClientNew({
 
             <div className="space-y-2">
               <Label>Select Recipients</Label>
+              {activeTab === "family" && uniquePatients.length > 0 && (
+                <div className="flex gap-2 flex-wrap mb-2">
+                  <Badge
+                    variant={selectedPatientFilter === null ? "default" : "outline"}
+                    className={`cursor-pointer ${selectedPatientFilter === null ? "bg-[#7A9B8E] hover:bg-[#6a8b7e]" : ""}`}
+                    onClick={() => setSelectedPatientFilter(null)}
+                  >
+                    All
+                  </Badge>
+                  {uniquePatients.map((patient) => (
+                    <Badge
+                      key={patient.id}
+                      variant={selectedPatientFilter === patient.id ? "default" : "outline"}
+                      className={`cursor-pointer ${selectedPatientFilter === patient.id ? "bg-[#7A9B8E] hover:bg-[#6a8b7e]" : ""}`}
+                      onClick={() => setSelectedPatientFilter(patient.id)}
+                    >
+                      {patient.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -878,7 +926,7 @@ export default function MessagesClientNew({
                           onCheckedChange={() => toggleRecipient(recipient.id)}
                         />
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-[#7A9B8E]/10 text-[#7A9B8E] text-xs">
+                          <AvatarFallback className={`text-xs ${recipient.role === "family_member" ? "bg-[#B8A9D4]/20 text-[#B8A9D4]" : "bg-[#7A9B8E]/10 text-[#7A9B8E]"}`}>
                             {getInitials(recipient.full_name)}
                           </AvatarFallback>
                         </Avatar>
@@ -886,8 +934,17 @@ export default function MessagesClientNew({
                           <p className="text-sm font-medium truncate">
                             {recipient.full_name || recipient.email || "Unknown User"}
                           </p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {recipient.role?.replace("_", " ")}
+                          <p className="text-xs text-muted-foreground">
+                            {recipient.role === "family_member" ? (
+                              <>
+                                <span className="capitalize">{recipient.relationship || "Family Member"}</span>
+                                {recipient.patient_name && (
+                                  <span className="text-[#7A9B8E]"> • {recipient.patient_name}</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="capitalize">{recipient.role?.replace("_", " ")}</span>
+                            )}
                           </p>
                         </div>
                       </div>
