@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
+import { completeFamilyMemberOnboarding } from "@/lib/actions/patients";
 import {
   CheckCircle2,
   User,
@@ -360,14 +361,13 @@ function AcceptInviteContent() {
 
       // 2. Update the invitation status
       if (invitation.type === "family") {
-        // Family member invitation: update family_members table
-        await supabase
-          .from("family_members")
-          .update({ 
-            status: "active",
-            user_id: userId,
-          })
-          .eq("id", invitation.family_member_id);
+        // Family member invitation: use server action to update with service role
+        try {
+          await completeFamilyMemberOnboarding(invitation.family_member_id!, userId);
+        } catch (updateError: any) {
+          console.error("Error updating family member status:", updateError);
+          throw new Error("Failed to complete onboarding. Please try again.");
+        }
       } else if (invitation.id !== "auth-flow") {
         // Token-based flow: update by invitation id
         await supabase

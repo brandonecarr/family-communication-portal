@@ -496,3 +496,32 @@ export async function deleteFamilyMember(id: string, patient_id: string) {
   
   return { success: true };
 }
+
+// Complete family member onboarding - updates status to active
+export async function completeFamilyMemberOnboarding(
+  familyMemberId: string,
+  userId: string
+) {
+  const supabase = await createServiceClient();
+  
+  if (!supabase) {
+    throw new Error("Service client not available");
+  }
+  
+  const { error } = await supabase
+    .from("family_members")
+    .update({ 
+      status: "active",
+      user_id: userId,
+      invite_token: null,
+      invite_expires_at: null,
+    })
+    .eq("id", familyMemberId);
+  
+  if (error) {
+    console.error("Error completing family member onboarding:", error);
+    throw new Error(error.message || "Failed to complete onboarding");
+  }
+  
+  return { success: true };
+}
