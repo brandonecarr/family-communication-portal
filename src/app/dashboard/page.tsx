@@ -8,9 +8,11 @@ export default async function Dashboard() {
 
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  // Handle auth errors (including refresh token issues)
+  if (error || !user) {
     redirect("/sign-in");
   }
 

@@ -74,9 +74,17 @@ export const updateSession = async (request: NextRequest) => {
 
     const { data: { user }, error } = await supabase.auth.getUser();
 
-    // If there's a JWT error, clear the session cookies to force re-auth
-    if (error && (error.message.includes("JWT") || error.message.includes("token"))) {
-      console.warn("Invalid JWT token detected, clearing session");
+    // If there's an auth error (JWT, token, or refresh token issues), clear the session cookies
+    const isAuthError = error && (
+      error.message.includes("JWT") || 
+      error.message.includes("token") ||
+      error.message.includes("Refresh Token") ||
+      (error as any).code === "refresh_token_not_found" ||
+      (error as any).status === 400
+    );
+    
+    if (isAuthError) {
+      console.warn("Auth error detected, clearing session:", error.message);
       // Clear auth cookies
       response.cookies.delete("sb-access-token");
       response.cookies.delete("sb-refresh-token");
@@ -87,6 +95,19 @@ export const updateSession = async (request: NextRequest) => {
           response.cookies.delete(cookie.name);
         }
       });
+      
+      // Redirect to sign-in for protected routes
+      const isProtectedRoute = 
+        request.nextUrl.pathname.startsWith("/dashboard") ||
+        request.nextUrl.pathname.startsWith("/admin") ||
+        request.nextUrl.pathname.startsWith("/family") ||
+        request.nextUrl.pathname.startsWith("/super-admin") ||
+        request.nextUrl.pathname.startsWith("/profile") ||
+        request.nextUrl.pathname.startsWith("/onboarding");
+      
+      if (isProtectedRoute) {
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+      }
     }
 
     // protected routes
