@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "../../../supabase/server";
+import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 
@@ -94,23 +94,50 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
     .single();
 
   const agencyId = currentUserAgency?.agency_id;
-  if (!agencyId) return [];
+  if (!agencyId) {
+    console.log("[DEBUG] No agency_id found for user");
+    return [];
+  }
+
+  console.log(`[DEBUG] Fetching team members for agency ${agencyId}`);
+
+  // Use service client to bypass RLS for fetching team members
+  const serviceClient = await createServiceClient();
+  if (!serviceClient) {
+    console.error("Service client not available");
+    return [];
+  }
 
   // Fetch all team members for this agency
-  const { data: agencyUsers } = await supabase
+  const { data: agencyUsers, error: agencyUsersError } = await serviceClient
     .from("agency_users")
     .select("user_id, role, created_at")
     .eq("agency_id", agencyId)
     .order("created_at", { ascending: false });
 
+  if (agencyUsersError) {
+    console.error("[DEBUG] Error fetching agency_users:", agencyUsersError);
+  }
+
+  console.log(`[DEBUG] Found ${(agencyUsers || []).length} agency_users records`);
+
   // Get user details for all team members
   const userIds = (agencyUsers || []).map((au: any) => au.user_id);
-  if (userIds.length === 0) return [];
+  if (userIds.length === 0) {
+    console.log("[DEBUG] No user_ids found in agency_users");
+    return [];
+  }
 
-  const { data: users } = await supabase
+  const { data: users, error: usersError } = await serviceClient
     .from("users")
     .select("id, full_name, email, avatar_url, last_sign_in_at")
     .in("id", userIds);
+
+  if (usersError) {
+    console.error("[DEBUG] Error fetching users:", usersError);
+  }
+
+  console.log(`[DEBUG] Found ${(users || []).length} users records`);
 
   if (!users) return [];
 

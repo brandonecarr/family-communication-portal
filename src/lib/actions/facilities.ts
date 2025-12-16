@@ -4,6 +4,46 @@ import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 import { getSiteUrl } from "@/lib/utils";
 
+// Ensure agency_users record exists for a user (used during onboarding)
+export async function ensureAgencyUserRecord(
+  userId: string,
+  agencyId: string,
+  role: "agency_admin" | "agency_staff" = "agency_admin"
+) {
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    return { success: false, error: "Service client not available" };
+  }
+
+  // Check if record already exists
+  const { data: existing } = await serviceClient
+    .from("agency_users")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("agency_id", agencyId)
+    .single();
+
+  if (existing) {
+    return { success: true, existing: true };
+  }
+
+  // Create the record
+  const { error } = await serviceClient
+    .from("agency_users")
+    .insert({
+      user_id: userId,
+      agency_id: agencyId,
+      role,
+    });
+
+  if (error) {
+    console.error("Error creating agency_users record:", error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, existing: false };
+}
+
 export async function getFacilities() {
   const supabase = await createClient();
   

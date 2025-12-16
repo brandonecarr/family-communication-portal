@@ -384,10 +384,11 @@ export default function PatientList() {
           </Card>
         ) : (
           filteredPatients.map((patient) => (
-            <Card key={patient.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
+            <Link key={patient.id} href={`/admin/patients/${patient.id}`} className="block">
+              <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow cursor-pointer">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4 flex-1">
                     <Avatar className="h-12 w-12">
                       <AvatarFallback className="bg-[#7A9B8E]/10 text-[#7A9B8E] text-lg">
                         {`${patient.first_name?.[0] || ''}${patient.last_name?.[0] || ''}` || "?"}
@@ -502,6 +503,7 @@ export default function PatientList() {
                 </div>
               </CardContent>
             </Card>
+            </Link>
           ))
         )}
       </div>

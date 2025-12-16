@@ -310,21 +310,11 @@ function AdminSetupContent() {
       }
 
       if (user && facilityId) {
-        const { data: existingAssignment } = await supabase
-          .from("agency_users")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("agency_id", facilityId)
-          .single();
-
-        if (!existingAssignment) {
-          await supabase
-            .from("agency_users")
-            .insert({
-              user_id: user.id,
-              agency_id: facilityId,
-              role: "agency_admin",
-            });
+        // Use server action to ensure agency_users record exists
+        const { ensureAgencyUserRecord } = await import("@/lib/actions/facilities");
+        const result = await ensureAgencyUserRecord(user.id, facilityId, "agency_admin");
+        if (!result.success) {
+          console.error("Failed to create agency_users record:", result.error);
         }
       }
 
