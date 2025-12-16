@@ -39,6 +39,11 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { createClient } from "../../../../supabase/client";
 import {
   getMessageThreads,
@@ -296,7 +301,8 @@ export default function MessagesClientNew({
   };
 
   // Filter threads by search
-  const filteredThreads = (showArchived ? archivedThreads : threads).filter(
+  const threadsList = showArchived ? archivedThreads : threads;
+  const filteredThreads = (threadsList || []).filter(
     (thread) => {
       if (!searchQuery) return true;
       const searchLower = searchQuery.toLowerCase();
@@ -451,7 +457,7 @@ export default function MessagesClientNew({
                       {filteredThreads.map((thread) => (
                         <div
                           key={thread.id}
-                          onClick={() => setSelectedThread(thread)}
+                          onClick={() => loadThreadMessages(thread.id)}
                           className={`p-3 rounded-xl cursor-pointer transition-colors ${
                             selectedThread?.id === thread.id
                               ? "bg-[#7A9B8E]/10 border border-[#7A9B8E]/30"
@@ -523,9 +529,50 @@ export default function MessagesClientNew({
                           <h3 className="font-semibold">
                             {getThreadDisplayName(selectedThread)}
                           </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {selectedThread.participants?.length || 0} participants
-                          </p>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="text-xs text-muted-foreground hover:text-[#7A9B8E] hover:underline cursor-pointer transition-colors">
+                                {selectedThread.participants?.length || 0} participants
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72 p-0" align="start">
+                              <div className="p-3 border-b bg-[#FAF8F5]">
+                                <h4 className="font-semibold text-sm">Chat Participants</h4>
+                              </div>
+                              <ScrollArea className="max-h-64">
+                                <div className="p-2 space-y-1">
+                                  {selectedThread.participants?.map((participant: any) => (
+                                    <div
+                                      key={participant.id}
+                                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
+                                    >
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarFallback className="bg-[#7A9B8E]/10 text-[#7A9B8E] text-xs">
+                                          {getInitials(participant.user?.full_name || participant.user?.email || "?")}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {participant.user?.full_name || "Unknown"}
+                                          {participant.user_id === currentUserId && (
+                                            <span className="text-xs text-muted-foreground ml-1">(You)</span>
+                                          )}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                          {participant.user?.job_role || "No role specified"}
+                                        </p>
+                                      </div>
+                                      {participant.is_admin && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          Admin
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
                       {!showArchived && (
@@ -665,7 +712,7 @@ export default function MessagesClientNew({
                       {filteredThreads.map((thread) => (
                         <div
                           key={thread.id}
-                          onClick={() => setSelectedThread(thread)}
+                          onClick={() => loadThreadMessages(thread.id)}
                           className={`p-3 rounded-xl cursor-pointer transition-colors ${
                             selectedThread?.id === thread.id
                               ? "bg-[#7A9B8E]/10 border border-[#7A9B8E]/30"
@@ -737,9 +784,50 @@ export default function MessagesClientNew({
                           <h3 className="font-semibold">
                             {getThreadDisplayName(selectedThread)}
                           </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {selectedThread.participants?.length || 0} participants
-                          </p>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="text-xs text-muted-foreground hover:text-[#B8A9D4] hover:underline cursor-pointer transition-colors">
+                                {selectedThread.participants?.length || 0} participants
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72 p-0" align="start">
+                              <div className="p-3 border-b bg-[#FAF8F5]">
+                                <h4 className="font-semibold text-sm">Chat Participants</h4>
+                              </div>
+                              <ScrollArea className="max-h-64">
+                                <div className="p-2 space-y-1">
+                                  {selectedThread.participants?.map((participant: any) => (
+                                    <div
+                                      key={participant.id}
+                                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
+                                    >
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarFallback className="bg-[#B8A9D4]/20 text-[#B8A9D4] text-xs">
+                                          {getInitials(participant.user?.full_name || participant.user?.email || "?")}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {participant.user?.full_name || "Unknown"}
+                                          {participant.user_id === currentUserId && (
+                                            <span className="text-xs text-muted-foreground ml-1">(You)</span>
+                                          )}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                          {participant.user?.job_role || "No role specified"}
+                                        </p>
+                                      </div>
+                                      {participant.is_admin && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          Admin
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
                       {!showArchived && (
@@ -943,7 +1031,7 @@ export default function MessagesClientNew({
                                 )}
                               </>
                             ) : (
-                              <span className="capitalize">{recipient.role?.replace("_", " ")}</span>
+                              <span className="capitalize">{recipient.job_role || recipient.role?.replace("_", " ")}</span>
                             )}
                           </p>
                         </div>

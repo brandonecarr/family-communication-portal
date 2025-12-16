@@ -75,7 +75,7 @@ const roleLabels: Record<string, string> = {
 };
 
 const jobRoleOptions = [
-  { value: "Admin", label: "Admin" },
+  { value: "Administrator", label: "Administrator" },
   { value: "RN", label: "RN" },
   { value: "LVN/LPN", label: "LVN/LPN" },
   { value: "HHA", label: "HHA" },

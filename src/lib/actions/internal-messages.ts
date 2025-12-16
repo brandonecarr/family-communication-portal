@@ -33,6 +33,7 @@ export interface ThreadParticipant {
     email: string | null;
     avatar_url: string | null;
     role: string | null;
+    job_role: string | null;
   };
 }
 
@@ -167,11 +168,20 @@ export async function getMessageThreads(
       .select("id, full_name, name, email, avatar_url, role")
       .in("id", allParticipantUserIds);
     
+    // Get job_role from agency_users
+    const { data: agencyUsers } = await supabase
+      .from("agency_users")
+      .select("user_id, job_role")
+      .in("user_id", allParticipantUserIds);
+    
+    const jobRoleMap = new Map((agencyUsers || []).map((au: any) => [au.user_id, au.job_role]));
+    
     if (users) {
-      // Normalize full_name to use name as fallback
+      // Normalize full_name to use name as fallback and add job_role
       participantUsers = users.map((u: any) => ({
         ...u,
         full_name: u.full_name || u.name || null,
+        job_role: jobRoleMap.get(u.id) || null,
       }));
     }
   }
@@ -256,11 +266,20 @@ export async function getThreadWithMessages(threadId: string) {
       .select("id, full_name, name, email, avatar_url, role")
       .in("id", participantUserIds);
     
+    // Get job_role from agency_users
+    const { data: agencyUsers } = await supabase
+      .from("agency_users")
+      .select("user_id, job_role")
+      .in("user_id", participantUserIds);
+    
+    const jobRoleMap = new Map((agencyUsers || []).map((au: any) => [au.user_id, au.job_role]));
+    
     if (users) {
-      // Normalize full_name to use name as fallback
+      // Normalize full_name to use name as fallback and add job_role
       participantUsers = users.map((u: any) => ({
         ...u,
         full_name: u.full_name || u.name || null,
+        job_role: jobRoleMap.get(u.id) || null,
       }));
     }
   }
@@ -539,7 +558,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
       // Get all staff members in the agency
       const { data: staffUsers, error } = await supabase
         .from("agency_users")
-        .select("user_id, role")
+        .select("user_id, role, job_role")
         .eq("agency_id", agencyId)
         .in("role", ["agency_admin", "agency_staff"])
         .neq("user_id", user.id);
@@ -573,13 +592,14 @@ export async function getAvailableRecipients(category: "internal" | "family") {
           email: userData.email || null,
           avatar_url: userData.avatar_url || null,
           role: su.role,
+          job_role: su.job_role || null,
         };
       });
     } else {
       // Get all staff users in the agency
       const { data: agencyUsers, error: agencyError } = await supabase
         .from("agency_users")
-        .select("user_id, role")
+        .select("user_id, role, job_role")
         .eq("agency_id", agencyId)
         .neq("user_id", user.id);
 
@@ -613,6 +633,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
           email: userData.email || null,
           avatar_url: userData.avatar_url || null,
           role: au.role,
+          job_role: au.job_role || null,
         };
       });
 
@@ -623,17 +644,28 @@ export async function getAvailableRecipients(category: "internal" | "family") {
         return staffUsers;
       }
       
-      const { data: familyMembers, error: familyError } = await serviceClient
+      // Get ALL family members first (for debugging and to show pending ones)
+      const { data: allFamilyMembers, error: allFamilyError } = await serviceClient
         .from("family_members")
-        .select("user_id, name, email, patient_id, relationship, status")
-        .not("user_id", "is", null)
-        .neq("user_id", user.id)
-        .eq("status", "active");
-
-      if (familyError) {
-        console.error("Error fetching family members:", familyError);
-        return staffUsers;
-      }
+        .select("id, user_id, name, email, patient_id, relationship, status");
+      
+      console.log("getAvailableRecipients - All family members:", {
+        count: allFamilyMembers?.length,
+        members: allFamilyMembers?.map((fm: any) => ({
+          name: fm.name,
+          status: fm.status,
+          hasUserId: !!fm.user_id,
+          patient_id: fm.patient_id
+        }))
+      });
+      
+      // Get family members who have a user_id (have completed account setup)
+      // Having a user_id means they can receive messages
+      const familyMembers = (allFamilyMembers || []).filter((fm: any) => 
+        fm.user_id && fm.user_id !== user.id
+      );
+      
+      console.log("getAvailableRecipients - Filtered family members with user_id:", familyMembers?.length);
 
       // Get patients to filter by agency and include patient names
       const patientIds = (familyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
@@ -671,6 +703,9 @@ export async function getAvailableRecipients(category: "internal" | "family") {
             relationship: fm.relationship,
           };
         });
+
+      console.log("getAvailableRecipients - Agency family members after filtering:", agencyFamilyMembers?.length);
+      console.log("getAvailableRecipients - Total recipients:", staffUsers.length + agencyFamilyMembers.length);
 
       return [...staffUsers, ...agencyFamilyMembers];
     }
