@@ -1300,6 +1300,7 @@ export type Database = {
       archive_old_threads: { Args: never; Returns: undefined }
       get_user_agency_id: { Args: never; Returns: string }
       is_agency_admin: { Args: { check_agency_id: string }; Returns: boolean }
+      is_current_user_agency_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
