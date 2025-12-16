@@ -94,7 +94,7 @@ export default async function AdminTeamManagementPage() {
       // Get from public.users table using service client
       const { data: userDetails, error: userError } = await (serviceClient || supabase)
         .from("users")
-        .select("id, full_name, name, email, avatar_url, last_sign_in_at")
+        .select("id, full_name, name, email, avatar_url")
         .eq("id", staff.user_id)
         .single();
       
@@ -119,7 +119,7 @@ export default async function AdminTeamManagementPage() {
     role: staff.role,
     jobRole: staff.job_role || null,
     status: "Active",
-    lastLogin: staff.userDetails?.last_sign_in_at || null,
+    lastLogin: staff.created_at,
     joinDate: staff.created_at,
     avatar_url: staff.userDetails?.avatar_url,
   }));
