@@ -616,7 +616,9 @@ export default function MessagesClientNew({
                                           </p>
                                           <p className="text-xs text-muted-foreground truncate">
                                             {participant.user?.job_role ||
-                                              "No role specified"}
+                                              (participant.user?.role === "family_member"
+                                                ? "Family Member"
+                                                : "No role specified")}
                                           </p>
                                         </div>
                                         {participant.is_admin && (
@@ -900,7 +902,9 @@ export default function MessagesClientNew({
                                           </p>
                                           <p className="text-xs text-muted-foreground truncate">
                                             {participant.user?.job_role ||
-                                              "No role specified"}
+                                              (participant.user?.role === "family_member"
+                                                ? "Family Member"
+                                                : "No role specified")}
                                           </p>
                                         </div>
                                         {participant.is_admin && (

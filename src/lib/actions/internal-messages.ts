@@ -99,7 +99,7 @@ export async function getMessageThreads(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return [];
 
   const agencyId = await getUserAgencyId(supabase);
   const isStaff = await isStaffUser(supabase, user.id);
