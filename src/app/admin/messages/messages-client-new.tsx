@@ -44,6 +44,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createClient } from "../../../../supabase/client";
 import {
   getMessageThreads,
@@ -74,13 +81,19 @@ export default function MessagesClientNew({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if user is staff (can see internal messages)
-  const isStaff = ["agency_admin", "agency_staff", "super_admin"].includes(userRole);
+  const isStaff = ["agency_admin", "agency_staff", "super_admin"].includes(
+    userRole,
+  );
 
   // State - default to family tab for non-staff users
-  const [activeTab, setActiveTab] = useState<"internal" | "family">(isStaff ? "internal" : "family");
+  const [activeTab, setActiveTab] = useState<"internal" | "family">(
+    isStaff ? "internal" : "family",
+  );
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<MessageThread[]>([]);
-  const [selectedThread, setSelectedThread] = useState<MessageThread | null>(null);
+  const [selectedThread, setSelectedThread] = useState<MessageThread | null>(
+    null,
+  );
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [newMessage, setNewMessage] = useState("");
@@ -95,7 +108,9 @@ export default function MessagesClientNew({
   const [newThreadSubject, setNewThreadSubject] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
   const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
-  const [selectedPatientFilter, setSelectedPatientFilter] = useState<string | null>(null);
+  const [selectedPatientFilter, setSelectedPatientFilter] = useState<
+    string | null
+  >(null);
 
   // Load threads on mount and tab change
   useEffect(() => {
@@ -130,7 +145,7 @@ export default function MessagesClientNew({
         },
         () => {
           loadThreadMessages(selectedThread.id);
-        }
+        },
       )
       .subscribe();
 
@@ -239,7 +254,13 @@ export default function MessagesClientNew({
 
   const handleOpenCreateDialog = async () => {
     try {
+      console.log("Opening create dialog with activeTab:", activeTab);
       const recipients = await getAvailableRecipients(activeTab);
+      console.log("Received recipients:", recipients);
+      console.log(
+        "Family members in recipients:",
+        recipients.filter((r: any) => r.role === "family_member"),
+      );
       setAvailableRecipients(recipients);
       setSelectedPatientFilter(null);
       setRecipientSearchQuery("");
@@ -296,24 +317,24 @@ export default function MessagesClientNew({
     setSelectedRecipients((prev) =>
       prev.includes(userId)
         ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+        : [...prev, userId],
     );
   };
 
   // Filter threads by search
   const threadsList = showArchived ? archivedThreads : threads;
-  const filteredThreads = (threadsList || []).filter(
-    (thread) => {
-      if (!searchQuery) return true;
-      const searchLower = searchQuery.toLowerCase();
-      const subject = thread.subject?.toLowerCase() || "";
-      const participantNames =
-        thread.participants
-          ?.map((p: any) => p.user?.full_name?.toLowerCase() || "")
-          .join(" ") || "";
-      return subject.includes(searchLower) || participantNames.includes(searchLower);
-    }
-  );
+  const filteredThreads = (threadsList || []).filter((thread) => {
+    if (!searchQuery) return true;
+    const searchLower = searchQuery.toLowerCase();
+    const subject = thread.subject?.toLowerCase() || "";
+    const participantNames =
+      thread.participants
+        ?.map((p: any) => p.user?.full_name?.toLowerCase() || "")
+        .join(" ") || "";
+    return (
+      subject.includes(searchLower) || participantNames.includes(searchLower)
+    );
+  });
 
   // Filter recipients by search and patient filter
   const filteredRecipients = availableRecipients.filter((r) => {
@@ -321,18 +342,23 @@ export default function MessagesClientNew({
     if (activeTab === "internal" && r.role === "family_member") {
       return false;
     }
-    
-    // Apply patient filter for family members
-    if (selectedPatientFilter && r.role === "family_member") {
+
+    // For family conversations, only show family members if a patient is selected
+    if (activeTab === "family" && r.role === "family_member") {
+      if (!selectedPatientFilter) return false;
       if (r.patient_id !== selectedPatientFilter) return false;
     }
-    
+
     if (!recipientSearchQuery) return true;
     const searchLower = recipientSearchQuery.toLowerCase();
     const name = r.full_name?.toLowerCase() || "";
     const email = r.email?.toLowerCase() || "";
     const patientName = r.patient_name?.toLowerCase() || "";
-    return name.includes(searchLower) || email.includes(searchLower) || patientName.includes(searchLower);
+    return (
+      name.includes(searchLower) ||
+      email.includes(searchLower) ||
+      patientName.includes(searchLower)
+    );
   });
 
   // Get unique patients from family members for the filter dropdown
@@ -348,10 +374,15 @@ export default function MessagesClientNew({
   const getThreadDisplayName = (thread: MessageThread) => {
     if (thread.subject) return thread.subject;
     const otherParticipants =
-      thread.participants?.filter((p: any) => p.user_id !== currentUserId) || [];
+      thread.participants?.filter((p: any) => p.user_id !== currentUserId) ||
+      [];
     if (otherParticipants.length === 0) return "No participants";
     if (otherParticipants.length === 1) {
-      return otherParticipants[0].user?.full_name || otherParticipants[0].user?.email || "Unknown";
+      return (
+        otherParticipants[0].user?.full_name ||
+        otherParticipants[0].user?.email ||
+        "Unknown"
+      );
     }
     return `${otherParticipants[0].user?.full_name || "Unknown"} +${otherParticipants.length - 1} others`;
   };
@@ -370,14 +401,16 @@ export default function MessagesClientNew({
     <div className="flex flex-col h-[calc(100vh-12rem)]">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-light" style={{ fontFamily: "Fraunces, serif" }}>
+        <h1
+          className="text-2xl font-light"
+          style={{ fontFamily: "Fraunces, serif" }}
+        >
           Messages
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           Secure messaging for your care team and families
         </p>
       </div>
-
       {/* Tabs */}
       <Tabs
         value={activeTab}
@@ -389,7 +422,9 @@ export default function MessagesClientNew({
         className="w-full"
       >
         <div className="flex items-center justify-between mb-4">
-          <TabsList className={`grid ${isStaff ? "w-[400px] grid-cols-2" : "w-[200px] grid-cols-1"}`}>
+          <TabsList
+            className={`grid ${isStaff ? "w-[400px] grid-cols-2" : "w-[200px] grid-cols-1"}`}
+          >
             {isStaff && (
               <TabsTrigger value="internal" className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
@@ -475,20 +510,29 @@ export default function MessagesClientNew({
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-medium text-sm truncate">
-                                  {getThreadDisplayName(thread)}
-                                </h4>
-                                {(thread.unread_count || 0) > 0 && (
-                                  <Badge className="bg-[#D4876F] text-white text-xs">
-                                    {thread.unread_count}
-                                  </Badge>
-                                )}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <h4 className="font-medium text-sm truncate">
+                                    {getThreadDisplayName(thread)}
+                                  </h4>
+                                  {(thread.unread_count || 0) > 0 && (
+                                    <Badge className="bg-[#D4876F] text-white text-xs shrink-0">
+                                      {thread.unread_count}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {formatDistanceToNow(
+                                    new Date(thread.last_message_at),
+                                    {
+                                      addSuffix: true,
+                                    },
+                                  )}
+                                </span>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {formatDistanceToNow(new Date(thread.last_message_at), {
-                                  addSuffix: true,
-                                })}
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2 min-h-[2.5rem] flex flex-row items-start gap-4">
+                                {thread.last_message_preview ||
+                                  "No messages yet"}
                               </p>
                             </div>
                           </div>
@@ -532,43 +576,60 @@ export default function MessagesClientNew({
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="text-xs text-muted-foreground hover:text-[#7A9B8E] hover:underline cursor-pointer transition-colors">
-                                {selectedThread.participants?.length || 0} participants
+                                {selectedThread.participants?.length || 0}{" "}
+                                participants
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-72 p-0" align="start">
                               <div className="p-3 border-b bg-[#FAF8F5]">
-                                <h4 className="font-semibold text-sm">Chat Participants</h4>
+                                <h4 className="font-semibold text-sm">
+                                  Chat Participants
+                                </h4>
                               </div>
                               <ScrollArea className="max-h-64">
                                 <div className="p-2 space-y-1">
-                                  {selectedThread.participants?.map((participant: any) => (
-                                    <div
-                                      key={participant.id}
-                                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
-                                    >
-                                      <Avatar className="h-8 w-8">
-                                        <AvatarFallback className="bg-[#7A9B8E]/10 text-[#7A9B8E] text-xs">
-                                          {getInitials(participant.user?.full_name || participant.user?.email || "?")}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
-                                          {participant.user?.full_name || "Unknown"}
-                                          {participant.user_id === currentUserId && (
-                                            <span className="text-xs text-muted-foreground ml-1">(You)</span>
-                                          )}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground truncate">
-                                          {participant.user?.job_role || "No role specified"}
-                                        </p>
+                                  {selectedThread.participants?.map(
+                                    (participant: any) => (
+                                      <div
+                                        key={participant.id}
+                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
+                                      >
+                                        <Avatar className="h-8 w-8">
+                                          <AvatarFallback className="bg-[#7A9B8E]/10 text-[#7A9B8E] text-xs">
+                                            {getInitials(
+                                              participant.user?.full_name ||
+                                                participant.user?.email ||
+                                                "?",
+                                            )}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">
+                                            {participant.user?.full_name ||
+                                              "Unknown"}
+                                            {participant.user_id ===
+                                              currentUserId && (
+                                              <span className="text-xs text-muted-foreground ml-1">
+                                                (You)
+                                              </span>
+                                            )}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground truncate">
+                                            {participant.user?.job_role ||
+                                              "No role specified"}
+                                          </p>
+                                        </div>
+                                        {participant.is_admin && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-xs"
+                                          >
+                                            Admin
+                                          </Badge>
+                                        )}
                                       </div>
-                                      {participant.is_admin && (
-                                        <Badge variant="secondary" className="text-xs">
-                                          Admin
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  ))}
+                                    ),
+                                  )}
                                 </div>
                               </ScrollArea>
                             </PopoverContent>
@@ -589,7 +650,9 @@ export default function MessagesClientNew({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleUnarchiveThread(selectedThread.id)}
+                          onClick={() =>
+                            handleUnarchiveThread(selectedThread.id)
+                          }
                         >
                           Restore
                         </Button>
@@ -616,21 +679,28 @@ export default function MessagesClientNew({
                             >
                               {!isOwn && (
                                 <p className="text-xs font-medium mb-1 text-[#7A9B8E]">
-                                  {message.sender?.full_name || message.sender?.email || "Unknown"}
+                                  {message.sender?.full_name ||
+                                    message.sender?.email ||
+                                    "Unknown"}
                                 </p>
                               )}
-                              <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+                              <p className="text-sm whitespace-pre-wrap">
+                                {message.body}
+                              </p>
                               <div
                                 className={`flex items-center justify-end gap-1 mt-1 ${
-                                  isOwn ? "text-white/70" : "text-muted-foreground"
+                                  isOwn
+                                    ? "text-white/70"
+                                    : "text-muted-foreground"
                                 }`}
                               >
                                 <span className="text-xs">
-                                  {format(new Date(message.created_at), "h:mm a")}
+                                  {format(
+                                    new Date(message.created_at),
+                                    "h:mm a",
+                                  )}
                                 </span>
-                                {isOwn && (
-                                  <CheckCheck className="h-3 w-3" />
-                                )}
+                                {isOwn && <CheckCheck className="h-3 w-3" />}
                               </div>
                             </div>
                           </div>
@@ -741,9 +811,12 @@ export default function MessagesClientNew({
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {formatDistanceToNow(new Date(thread.last_message_at), {
-                                  addSuffix: true,
-                                })}
+                                {formatDistanceToNow(
+                                  new Date(thread.last_message_at),
+                                  {
+                                    addSuffix: true,
+                                  },
+                                )}
                               </p>
                             </div>
                           </div>
@@ -787,43 +860,60 @@ export default function MessagesClientNew({
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="text-xs text-muted-foreground hover:text-[#B8A9D4] hover:underline cursor-pointer transition-colors">
-                                {selectedThread.participants?.length || 0} participants
+                                {selectedThread.participants?.length || 0}{" "}
+                                participants
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-72 p-0" align="start">
                               <div className="p-3 border-b bg-[#FAF8F5]">
-                                <h4 className="font-semibold text-sm">Chat Participants</h4>
+                                <h4 className="font-semibold text-sm">
+                                  Chat Participants
+                                </h4>
                               </div>
                               <ScrollArea className="max-h-64">
                                 <div className="p-2 space-y-1">
-                                  {selectedThread.participants?.map((participant: any) => (
-                                    <div
-                                      key={participant.id}
-                                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
-                                    >
-                                      <Avatar className="h-8 w-8">
-                                        <AvatarFallback className="bg-[#B8A9D4]/20 text-[#B8A9D4] text-xs">
-                                          {getInitials(participant.user?.full_name || participant.user?.email || "?")}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
-                                          {participant.user?.full_name || "Unknown"}
-                                          {participant.user_id === currentUserId && (
-                                            <span className="text-xs text-muted-foreground ml-1">(You)</span>
-                                          )}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground truncate">
-                                          {participant.user?.job_role || "No role specified"}
-                                        </p>
+                                  {selectedThread.participants?.map(
+                                    (participant: any) => (
+                                      <div
+                                        key={participant.id}
+                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#FAF8F5] transition-colors"
+                                      >
+                                        <Avatar className="h-8 w-8">
+                                          <AvatarFallback className="bg-[#B8A9D4]/20 text-[#B8A9D4] text-xs">
+                                            {getInitials(
+                                              participant.user?.full_name ||
+                                                participant.user?.email ||
+                                                "?",
+                                            )}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">
+                                            {participant.user?.full_name ||
+                                              "Unknown"}
+                                            {participant.user_id ===
+                                              currentUserId && (
+                                              <span className="text-xs text-muted-foreground ml-1">
+                                                (You)
+                                              </span>
+                                            )}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground truncate">
+                                            {participant.user?.job_role ||
+                                              "No role specified"}
+                                          </p>
+                                        </div>
+                                        {participant.is_admin && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-xs"
+                                          >
+                                            Admin
+                                          </Badge>
+                                        )}
                                       </div>
-                                      {participant.is_admin && (
-                                        <Badge variant="secondary" className="text-xs">
-                                          Admin
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  ))}
+                                    ),
+                                  )}
                                 </div>
                               </ScrollArea>
                             </PopoverContent>
@@ -844,7 +934,9 @@ export default function MessagesClientNew({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleUnarchiveThread(selectedThread.id)}
+                          onClick={() =>
+                            handleUnarchiveThread(selectedThread.id)
+                          }
                         >
                           Restore
                         </Button>
@@ -871,21 +963,28 @@ export default function MessagesClientNew({
                             >
                               {!isOwn && (
                                 <p className="text-xs font-medium mb-1 text-[#B8A9D4]">
-                                  {message.sender?.full_name || message.sender?.email || "Unknown"}
+                                  {message.sender?.full_name ||
+                                    message.sender?.email ||
+                                    "Unknown"}
                                 </p>
                               )}
-                              <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+                              <p className="text-sm whitespace-pre-wrap">
+                                {message.body}
+                              </p>
                               <div
                                 className={`flex items-center justify-end gap-1 mt-1 ${
-                                  isOwn ? "text-white/70" : "text-muted-foreground"
+                                  isOwn
+                                    ? "text-white/70"
+                                    : "text-muted-foreground"
                                 }`}
                               >
                                 <span className="text-xs">
-                                  {format(new Date(message.created_at), "h:mm a")}
+                                  {format(
+                                    new Date(message.created_at),
+                                    "h:mm a",
+                                  )}
                                 </span>
-                                {isOwn && (
-                                  <CheckCheck className="h-3 w-3" />
-                                )}
+                                {isOwn && <CheckCheck className="h-3 w-3" />}
                               </div>
                             </div>
                           </div>
@@ -934,13 +1033,13 @@ export default function MessagesClientNew({
           </div>
         </TabsContent>
       </Tabs>
-
       {/* Create Conversation Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "Fraunces, serif" }}>
-              New {activeTab === "internal" ? "Internal" : "Family"} Conversation
+              New {activeTab === "internal" ? "Internal" : "Family"}{" "}
+              Conversation
             </DialogTitle>
             <DialogDescription>
               {activeTab === "internal"
@@ -950,6 +1049,36 @@ export default function MessagesClientNew({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Patient (optional)</Label>
+              {uniquePatients.length > 0 ? (
+                <Select
+                  value={selectedPatientFilter || "all"}
+                  onValueChange={(value) =>
+                    setSelectedPatientFilter(value === "all" ? null : value)
+                  }
+                >
+                  <SelectTrigger className="bg-[#FAF8F5] border-none">
+                    <SelectValue placeholder="All Patients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Patients</SelectItem>
+                    {uniquePatients.map((patient) => (
+                      <SelectItem key={patient.id} value={patient.id}>
+                        {patient.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {activeTab === "family"
+                    ? "No patients with family members found. Add family members to patients first."
+                    : "No patients found. Add patients first."}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label>Subject (optional)</Label>
               <Input
@@ -962,27 +1091,6 @@ export default function MessagesClientNew({
 
             <div className="space-y-2">
               <Label>Select Recipients</Label>
-              {activeTab === "family" && uniquePatients.length > 0 && (
-                <div className="flex gap-2 flex-wrap mb-2">
-                  <Badge
-                    variant={selectedPatientFilter === null ? "default" : "outline"}
-                    className={`cursor-pointer ${selectedPatientFilter === null ? "bg-[#7A9B8E] hover:bg-[#6a8b7e]" : ""}`}
-                    onClick={() => setSelectedPatientFilter(null)}
-                  >
-                    All
-                  </Badge>
-                  {uniquePatients.map((patient) => (
-                    <Badge
-                      key={patient.id}
-                      variant={selectedPatientFilter === patient.id ? "default" : "outline"}
-                      className={`cursor-pointer ${selectedPatientFilter === patient.id ? "bg-[#7A9B8E] hover:bg-[#6a8b7e]" : ""}`}
-                      onClick={() => setSelectedPatientFilter(patient.id)}
-                    >
-                      {patient.name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -999,44 +1107,75 @@ export default function MessagesClientNew({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {filteredRecipients.map((recipient) => (
-                      <div
-                        key={recipient.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedRecipients.includes(recipient.id)
-                            ? "bg-[#7A9B8E]/10"
-                            : "hover:bg-[#FAF8F5]"
-                        }`}
-                        onClick={() => toggleRecipient(recipient.id)}
-                      >
-                        <Checkbox
-                          checked={selectedRecipients.includes(recipient.id)}
-                          onCheckedChange={() => toggleRecipient(recipient.id)}
-                        />
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className={`text-xs ${recipient.role === "family_member" ? "bg-[#B8A9D4]/20 text-[#B8A9D4]" : "bg-[#7A9B8E]/10 text-[#7A9B8E]"}`}>
-                            {getInitials(recipient.full_name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {recipient.full_name || recipient.name || recipient.email || "Unknown User"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {recipient.role === "family_member" ? (
-                              <>
-                                <span className="capitalize">{recipient.relationship || "Family Member"}</span>
-                                {recipient.patient_name && (
-                                  <span className="text-[#7A9B8E]"> • {recipient.patient_name}</span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="capitalize">{recipient.job_role || recipient.role?.replace("_", " ")}</span>
-                            )}
-                          </p>
+                    {filteredRecipients.map((recipient) => {
+                      const isMessageable =
+                        recipient.role !== "family_member" ||
+                        recipient.messageable !== false;
+                      return (
+                        <div
+                          key={recipient.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
+                            !isMessageable
+                              ? "opacity-50 cursor-not-allowed"
+                              : selectedRecipients.includes(recipient.id)
+                                ? "bg-[#7A9B8E]/10 cursor-pointer"
+                                : "hover:bg-[#FAF8F5] cursor-pointer"
+                          }`}
+                          onClick={() =>
+                            isMessageable && toggleRecipient(recipient.id)
+                          }
+                        >
+                          <Checkbox
+                            checked={selectedRecipients.includes(recipient.id)}
+                            onCheckedChange={() =>
+                              isMessageable && toggleRecipient(recipient.id)
+                            }
+                            disabled={!isMessageable}
+                          />
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback
+                              className={`text-xs ${recipient.role === "family_member" ? "bg-[#B8A9D4]/20 text-[#B8A9D4]" : "bg-[#7A9B8E]/10 text-[#7A9B8E]"}`}
+                            >
+                              {getInitials(recipient.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {recipient.full_name ||
+                                recipient.name ||
+                                recipient.email ||
+                                "Unknown User"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {recipient.role === "family_member" ? (
+                                <>
+                                  <span className="capitalize">
+                                    {recipient.relationship || "Family Member"}
+                                  </span>
+                                  {recipient.patient_name && (
+                                    <span className="text-[#7A9B8E]">
+                                      {" "}
+                                      • {recipient.patient_name}
+                                    </span>
+                                  )}
+                                  {!isMessageable && (
+                                    <span className="text-[#D4876F]">
+                                      {" "}
+                                      • Invite pending
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="capitalize">
+                                  {recipient.job_role ||
+                                    recipient.role?.replace("_", " ")}
+                                </span>
+                              )}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
@@ -1059,7 +1198,10 @@ export default function MessagesClientNew({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setCreateDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button

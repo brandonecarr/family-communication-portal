@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "../../../supabase/client";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
+import { createPatient } from "@/lib/actions/patients";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -160,24 +161,20 @@ export default function PatientList() {
     setIsSubmitting(true);
     try {
       console.log("Attempting to add patient:", newPatient);
-      const { data, error } = await supabase
-        .from("patients")
-        .insert([{
-          first_name: newPatient.first_name,
-          last_name: newPatient.last_name,
-          date_of_birth: newPatient.date_of_birth ? newPatient.date_of_birth.toISOString().split("T")[0] : null,
-          phone: newPatient.phone || null,
-          email: newPatient.email || null,
-          address: newPatient.address || null,
-          status: newPatient.status,
-          admission_date: newPatient.admission_date ? newPatient.admission_date.toISOString().split("T")[0] : null,
-        }])
-        .select()
-        .single();
+      
+      // Use server action to ensure agency_id is set
+      const data = await createPatient({
+        first_name: newPatient.first_name,
+        last_name: newPatient.last_name,
+        date_of_birth: newPatient.date_of_birth ? newPatient.date_of_birth.toISOString().split("T")[0] : undefined,
+        phone: newPatient.phone || undefined,
+        email: newPatient.email || undefined,
+        address: newPatient.address || undefined,
+        status: newPatient.status,
+        admission_date: newPatient.admission_date ? newPatient.admission_date.toISOString().split("T")[0] : undefined,
+      });
 
-      console.log("Insert result:", { data, error });
-
-      if (error) throw error;
+      console.log("Insert result:", { data });
 
       toast({
         title: "Success",

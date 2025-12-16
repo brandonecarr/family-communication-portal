@@ -18,6 +18,7 @@ export interface MessageThread {
   participants?: ThreadParticipant[];
   messages?: ThreadMessage[];
   unread_count?: number;
+  last_message_preview?: string | null;
 }
 
 export interface ThreadParticipant {
@@ -199,14 +200,22 @@ export async function getMessageThreads(
     participantsByThread.set(p.thread_id, existing);
   });
 
-  // Get unread counts for each thread
+  // Get unread counts and last message preview for each thread
+  // Use service client to bypass RLS for message preview since we've already verified thread access
+  const serviceClient = await createServiceClient();
   const threadsWithUnread = await Promise.all(
     threads.map(async (thread: any) => {
-      // Get all messages in thread
-      const { data: threadMessages } = await supabase
+      // Get all messages in thread using service client (or fall back to regular client)
+      const queryClient = serviceClient || supabase;
+      const { data: threadMessages, error: messagesError } = await queryClient
         .from("thread_messages")
-        .select("id")
-        .eq("thread_id", thread.id);
+        .select("id, body")
+        .eq("thread_id", thread.id)
+        .order("created_at", { ascending: false });
+      
+      if (messagesError) {
+        console.error("Error fetching thread messages:", messagesError);
+      }
 
       // Get read receipts for this user
       const { data: readReceipts } = await supabase
@@ -219,10 +228,14 @@ export async function getMessageThreads(
         (m: any) => !readMessageIds.has(m.id)
       ).length;
 
+      // Get last message preview (first message since ordered desc)
+      const lastMessagePreview = threadMessages?.[0]?.body || null;
+
       return {
         ...thread,
         participants: participantsByThread.get(thread.id) || [],
         unread_count: unreadCount,
+        last_message_preview: lastMessagePreview,
       };
     })
   );
@@ -570,31 +583,78 @@ export async function getAvailableRecipients(category: "internal" | "family") {
 
       // Get user details separately
       const userIds = (staffUsers || []).map((su: any) => su.user_id);
-      if (userIds.length === 0) return [];
+      
+      let staffUsersResult: any[] = [];
+      if (userIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from("users")
+          .select("id, full_name, name, email, avatar_url")
+          .in("id", userIds);
 
-      const { data: users, error: usersError } = await supabase
-        .from("users")
-        .select("id, full_name, name, email, avatar_url")
-        .in("id", userIds);
-
-      if (usersError) {
-        console.error("Error fetching user details:", usersError);
-        return [];
+        if (usersError) {
+          console.error("Error fetching user details:", usersError);
+        } else {
+          const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
+          staffUsersResult = (staffUsers || []).map((su: any) => {
+            const userData: any = usersMap.get(su.user_id) || {};
+            return {
+              id: su.user_id,
+              full_name: userData.full_name || userData.name || null,
+              email: userData.email || null,
+              avatar_url: userData.avatar_url || null,
+              role: su.role,
+              job_role: su.job_role || null,
+            };
+          });
+        }
       }
 
-      const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
+      // Also get patients data for the dropdown (even for internal messages)
+      const serviceClient = await createServiceClient();
+      if (serviceClient) {
+        const { data: allFamilyMembers } = await serviceClient
+          .from("family_members")
+          .select("id, user_id, name, email, patient_id, relationship, status");
+        
+        const allPatientIds = (allFamilyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
+        
+        if (allPatientIds.length > 0) {
+          const { data: patients } = await serviceClient
+            .from("patients")
+            .select("id, agency_id, first_name, last_name")
+            .in("id", allPatientIds)
+            .eq("agency_id", agencyId);
+          
+          const patientsMap = new Map((patients || []).map((p: any) => [p.id, p]));
+          
+          // Add family members with patient info (for the dropdown) but mark as not directly messageable in internal
+          const familyMembersForDropdown = (allFamilyMembers || [])
+            .filter((fm: any) => {
+              const patient = patientsMap.get(fm.patient_id);
+              return patient?.agency_id === agencyId;
+            })
+            .map((fm: any) => {
+              const patient = patientsMap.get(fm.patient_id);
+              return {
+                id: fm.user_id || fm.id,
+                full_name: fm.name,
+                email: fm.email,
+                avatar_url: null,
+                role: "family_member",
+                patient_id: fm.patient_id,
+                patient_name: patient ? `${patient.first_name} ${patient.last_name}`.trim() : null,
+                relationship: fm.relationship,
+                status: fm.status,
+                messageable: false, // Not messageable in internal conversations
+                forDropdownOnly: true, // Flag to indicate this is just for patient dropdown
+              };
+            });
+          
+          return [...staffUsersResult, ...familyMembersForDropdown];
+        }
+      }
 
-      return (staffUsers || []).map((su: any) => {
-        const userData: any = usersMap.get(su.user_id) || {};
-        return {
-          id: su.user_id,
-          full_name: userData.full_name || userData.name || null,
-          email: userData.email || null,
-          avatar_url: userData.avatar_url || null,
-          role: su.role,
-          job_role: su.job_role || null,
-        };
-      });
+      return staffUsersResult;
     } else {
       // Get all staff users in the agency
       const { data: agencyUsers, error: agencyError } = await supabase
@@ -644,56 +704,46 @@ export async function getAvailableRecipients(category: "internal" | "family") {
         return staffUsers;
       }
       
-      // Get ALL family members first (for debugging and to show pending ones)
+      // Get ALL family members (including those who haven't completed setup)
       const { data: allFamilyMembers, error: allFamilyError } = await serviceClient
         .from("family_members")
         .select("id, user_id, name, email, patient_id, relationship, status");
       
-      console.log("getAvailableRecipients - All family members:", {
-        count: allFamilyMembers?.length,
-        members: allFamilyMembers?.map((fm: any) => ({
-          name: fm.name,
-          status: fm.status,
-          hasUserId: !!fm.user_id,
-          patient_id: fm.patient_id
-        }))
-      });
-      
-      // Get family members who have a user_id (have completed account setup)
-      // Having a user_id means they can receive messages
-      const familyMembers = (allFamilyMembers || []).filter((fm: any) => 
-        fm.user_id && fm.user_id !== user.id
-      );
-      
-      console.log("getAvailableRecipients - Filtered family members with user_id:", familyMembers?.length);
+      if (allFamilyError) {
+        console.error("Error fetching family members:", allFamilyError);
+        return staffUsers;
+      }
 
-      // Get patients to filter by agency and include patient names
-      const patientIds = (familyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
-      let patientsData: any[] = [];
+      // Get ALL patient IDs from family members (for the patient dropdown)
+      const allPatientIds = (allFamilyMembers || []).map((fm: any) => fm.patient_id).filter(Boolean);
+      let allPatientsData: any[] = [];
       
-      if (patientIds.length > 0) {
-        const { data: patients } = await serviceClient
+      if (allPatientIds.length > 0) {
+        const { data: patients, error: patientsError } = await serviceClient
           .from("patients")
           .select("id, agency_id, first_name, last_name")
-          .in("id", patientIds);
+          .in("id", allPatientIds)
+          .eq("agency_id", agencyId);
         
         if (patients) {
-          patientsData = patients;
+          allPatientsData = patients;
         }
       }
 
-      const patientsMap = new Map(patientsData.map((p: any) => [p.id, p]));
+      const patientsMap = new Map(allPatientsData.map((p: any) => [p.id, p]));
 
-      // Filter family members by agency and include patient info
-      const agencyFamilyMembers = (familyMembers || [])
+      // Include ALL family members for the agency (even pending ones)
+      // Mark them as messageable: false if they haven't completed setup
+      const agencyFamilyMembers = (allFamilyMembers || [])
         .filter((fm: any) => {
           const patient = patientsMap.get(fm.patient_id);
           return patient?.agency_id === agencyId;
         })
         .map((fm: any) => {
           const patient = patientsMap.get(fm.patient_id);
+          const hasUserId = !!fm.user_id && fm.user_id !== user.id;
           return {
-            id: fm.user_id,
+            id: fm.user_id || fm.id, // Use family_member id if no user_id
             full_name: fm.name,
             email: fm.email,
             avatar_url: null,
@@ -701,11 +751,10 @@ export async function getAvailableRecipients(category: "internal" | "family") {
             patient_id: fm.patient_id,
             patient_name: patient ? `${patient.first_name} ${patient.last_name}`.trim() : null,
             relationship: fm.relationship,
+            status: fm.status,
+            messageable: hasUserId, // Can only message if they have completed account setup
           };
         });
-
-      console.log("getAvailableRecipients - Agency family members after filtering:", agencyFamilyMembers?.length);
-      console.log("getAvailableRecipients - Total recipients:", staffUsers.length + agencyFamilyMembers.length);
 
       return [...staffUsers, ...agencyFamilyMembers];
     }
