@@ -710,7 +710,7 @@ export async function resendFacilityInvite(facilityId: string) {
   return { error: null, success: true };
 }
 
-export async function inviteStaffMembers(staffMembers: Array<{ name: string; email: string; role: string }>, facilityId: string) {
+export async function inviteStaffMembers(staffMembers: Array<{ name: string; email: string; role: string; job_role?: string }>, facilityId: string) {
   const { createServiceClient } = await import("../../../supabase/server");
   const supabase = createServiceClient();
   
@@ -778,6 +778,7 @@ export async function inviteStaffMembers(staffMembers: Array<{ name: string; ema
             user_id: linkData.user.id,
             agency_id: facilityId,
             role: staff.role,
+            job_role: staff.job_role || null,
           });
 
         if (agencyUserError) {

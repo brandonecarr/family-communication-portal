@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Building2, 
   Lock, 
@@ -25,6 +26,7 @@ interface StaffMember {
   name: string;
   email: string;
   role: string;
+  job_role?: string;
 }
 
 function AdminSetupContent() {
@@ -56,7 +58,7 @@ function AdminSetupContent() {
   });
   
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
-  const [newStaff, setNewStaff] = useState({ name: "", email: "", role: "agency_staff" });
+  const [newStaff, setNewStaff] = useState({ name: "", email: "", role: "agency_staff", job_role: "" });
 
   const totalSteps = 4;
   const progress = (step / totalSteps) * 100;
@@ -247,7 +249,7 @@ function AdminSetupContent() {
       return;
     }
     setStaffMembers([...staffMembers, newStaff]);
-    setNewStaff({ name: "", email: "", role: "agency_staff" });
+    setNewStaff({ name: "", email: "", role: "agency_staff", job_role: "" });
     setError("");
   };
 
@@ -574,7 +576,7 @@ function AdminSetupContent() {
               )}
               
               <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E8E4DF]">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <Input
                     placeholder="Name"
                     value={newStaff.name}
@@ -588,6 +590,23 @@ function AdminSetupContent() {
                     onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
                     className="bg-white"
                   />
+                  <Select
+                    value={newStaff.job_role}
+                    onValueChange={(value) => setNewStaff({ ...newStaff, job_role: value })}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Select job role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nurse">Nurse</SelectItem>
+                      <SelectItem value="social_worker">Social Worker</SelectItem>
+                      <SelectItem value="chaplain">Chaplain</SelectItem>
+                      <SelectItem value="aide">Aide</SelectItem>
+                      <SelectItem value="volunteer">Volunteer</SelectItem>
+                      <SelectItem value="administrator">Administrator</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     onClick={addStaffMember}
@@ -616,6 +635,11 @@ function AdminSetupContent() {
                           <div>
                             <p className="font-medium text-sm">{staff.name}</p>
                             <p className="text-xs text-muted-foreground">{staff.email}</p>
+                            {staff.job_role && (
+                              <p className="text-xs text-muted-foreground capitalize mt-0.5">
+                                {staff.job_role.replace('_', ' ')}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
