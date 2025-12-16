@@ -598,13 +598,15 @@ function AdminSetupContent() {
                       <SelectValue placeholder="Select job role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="nurse">Nurse</SelectItem>
-                      <SelectItem value="social_worker">Social Worker</SelectItem>
-                      <SelectItem value="chaplain">Chaplain</SelectItem>
-                      <SelectItem value="aide">Aide</SelectItem>
-                      <SelectItem value="volunteer">Volunteer</SelectItem>
-                      <SelectItem value="administrator">Administrator</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="Admin">Admin</SelectItem>
+                      <SelectItem value="RN">RN</SelectItem>
+                      <SelectItem value="LVN/LPN">LVN/LPN</SelectItem>
+                      <SelectItem value="HHA">HHA</SelectItem>
+                      <SelectItem value="MSW">MSW</SelectItem>
+                      <SelectItem value="Chaplain">Chaplain</SelectItem>
+                      <SelectItem value="MD">MD</SelectItem>
+                      <SelectItem value="Care coordinator">Care coordinator</SelectItem>
+                      <SelectItem value="NP">NP</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -636,8 +638,8 @@ function AdminSetupContent() {
                             <p className="font-medium text-sm">{staff.name}</p>
                             <p className="text-xs text-muted-foreground">{staff.email}</p>
                             {staff.job_role && (
-                              <p className="text-xs text-muted-foreground capitalize mt-0.5">
-                                {staff.job_role.replace('_', ' ')}
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {staff.job_role}
                               </p>
                             )}
                           </div>
