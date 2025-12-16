@@ -635,19 +635,18 @@ function AdminSetupContent() {
                             <Mail className="w-4 h-4 text-[#B8A9D4]" />
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{staff.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{staff.name}</p>
+                              {staff.job_role && (
+                                <Badge variant="secondary" className="bg-[#B8A9D4]/20 text-[#B8A9D4] text-xs">
+                                  {staff.job_role}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground">{staff.email}</p>
-                            {staff.job_role && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {staff.job_role}
-                              </p>
-                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="bg-[#B8A9D4]/20 text-[#B8A9D4]">
-                            Staff
-                          </Badge>
                           <Button
                             variant="ghost"
                             size="icon"
