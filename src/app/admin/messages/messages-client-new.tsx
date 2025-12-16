@@ -345,9 +345,9 @@ export default function MessagesClientNew({
       thread.participants?.filter((p: any) => p.user_id !== currentUserId) || [];
     if (otherParticipants.length === 0) return "No participants";
     if (otherParticipants.length === 1) {
-      return otherParticipants[0].user?.full_name || otherParticipants[0].user?.name || otherParticipants[0].user?.email || "Unknown";
+      return otherParticipants[0].user?.full_name || otherParticipants[0].user?.email || "Unknown";
     }
-    return `${otherParticipants[0].user?.full_name || otherParticipants[0].user?.name || "Unknown"} +${otherParticipants.length - 1} others`;
+    return `${otherParticipants[0].user?.full_name || "Unknown"} +${otherParticipants.length - 1} others`;
   };
 
   const getInitials = (name: string | null | undefined) => {
