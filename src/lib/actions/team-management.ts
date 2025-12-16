@@ -163,6 +163,7 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
       name: userData.full_name || userData.name || userData.email?.split("@")[0] || "Unknown",
       email: userData.email || "",
       role: au.role,
+      jobRole: au.job_role || null,
       status: "Active",
       lastLogin: userData.last_sign_in_at || null,
       joinDate: au.created_at,
