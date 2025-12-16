@@ -137,7 +137,7 @@ export default async function AdminTeamManagementPage() {
   });
 
   // Get inviter names
-  const inviterIds = [...new Set((invitations || []).map((i: any) => i.invited_by).filter(Boolean))];
+  const inviterIds = Array.from(new Set((invitations || []).map((i: any) => i.invited_by).filter(Boolean))) as string[];
   let inviterMap = new Map();
   
   if (inviterIds.length > 0) {
