@@ -123,9 +123,10 @@ export default async function FacilityDetailPage({
     (staffMembers || []).map(async (staff: any) => {
       const { data: userDetails } = await supabase
         .from("users")
-        .select("full_name, email, role")
+        .select("full_name, name, email, role")
         .eq("id", staff.user_id)
         .single();
+      
       return {
         ...staff,
         userDetails,
@@ -430,7 +431,7 @@ export default async function FacilityDetailPage({
                     {staffWithDetails.map((staff: any) => (
                       <TableRow key={staff.id}>
                         <TableCell className="font-medium">
-                          {staff.userDetails?.full_name || "Unknown"}
+                          {staff.userDetails?.full_name || staff.userDetails?.name || staff.userDetails?.email?.split("@")[0] || "Unknown"}
                         </TableCell>
                         <TableCell>{staff.userDetails?.email || staff.user?.email || "N/A"}</TableCell>
                         <TableCell>

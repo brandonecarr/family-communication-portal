@@ -78,7 +78,7 @@ export default async function AdminTeamManagementPage() {
   // Fetch staff members directly - same approach as super admin facility page
   const { data: staffMembers, error: staffError } = await dbClient
     .from("agency_users")
-    .select("user_id, role, created_at")
+    .select("user_id, role, job_role, created_at")
     .eq("agency_id", agencyId);
 
   console.log("[TeamManagement] Staff query result:", {
@@ -88,39 +88,43 @@ export default async function AdminTeamManagementPage() {
     usingServiceClient: !!serviceClient,
   });
 
-  // Fetch staff details from users table
-  const userIds = (staffMembers || []).map((s: any) => s.user_id);
-  
-  let teamMembers: TeamMember[] = [];
-  
-  if (userIds.length > 0) {
-    const { data: users, error: usersError } = await dbClient
-      .from("users")
-      .select("id, full_name, email, avatar_url, last_sign_in_at")
-      .in("id", userIds);
-
-    console.log("[TeamManagement] Users query result:", {
-      userIdsCount: userIds.length,
-      usersCount: users?.length || 0,
-      error: usersError?.message,
-    });
-
-    const usersMap = new Map((users || []).map((u: any) => [u.id, u]));
-
-    teamMembers = (staffMembers || []).map((staff: any) => {
-      const userData: any = usersMap.get(staff.user_id) || {};
+  // Fetch staff details from users table - MUST use service client to bypass RLS
+  const staffWithDetails = await Promise.all(
+    (staffMembers || []).map(async (staff: any) => {
+      // Get from public.users table using service client
+      const { data: userDetails, error: userError } = await (serviceClient || supabase)
+        .from("users")
+        .select("id, full_name, name, email, avatar_url, last_sign_in_at")
+        .eq("id", staff.user_id)
+        .single();
+      
+      console.log("[TeamManagement] User details for", staff.user_id, ":", {
+        full_name: userDetails?.full_name,
+        name: userDetails?.name,
+        email: userDetails?.email,
+        error: userError?.message,
+      });
+      
       return {
-        id: staff.user_id,
-        name: userData.full_name || "Unknown",
-        email: userData.email || "",
-        role: staff.role,
-        status: "Active",
-        lastLogin: userData.last_sign_in_at || null,
-        joinDate: staff.created_at,
-        avatar_url: userData.avatar_url,
+        ...staff,
+        userDetails,
       };
-    });
-  }
+    })
+  );
+
+  const teamMembers: TeamMember[] = staffWithDetails.map((staff: any) => ({
+    id: staff.user_id,
+    name: staff.userDetails?.full_name || staff.userDetails?.name || staff.userDetails?.email?.split("@")[0] || "Unknown",
+    email: staff.userDetails?.email || "",
+    role: staff.role,
+    jobRole: staff.job_role || null,
+    status: "Active",
+    lastLogin: staff.userDetails?.last_sign_in_at || null,
+    joinDate: staff.created_at,
+    avatar_url: staff.userDetails?.avatar_url,
+  }));
+
+  console.log("[TeamManagement] Team members built:", teamMembers.length, teamMembers);
 
   // Fetch pending invitations
   const { data: invitations, error: invitationsError } = await dbClient

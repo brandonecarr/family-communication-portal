@@ -94,6 +94,7 @@ export type Database = {
           agency_id: string | null
           created_at: string | null
           id: string
+          job_role: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string | null
           user_id: string | null
@@ -102,6 +103,7 @@ export type Database = {
           agency_id?: string | null
           created_at?: string | null
           id?: string
+          job_role?: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
           user_id?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           agency_id?: string | null
           created_at?: string | null
           id?: string
+          job_role?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
           user_id?: string | null

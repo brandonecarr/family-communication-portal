@@ -60,6 +60,7 @@ export interface TeamMember {
   name: string;
   email: string;
   role: string;
+  jobRole: string | null;
   status: string;
   lastLogin: string | null;
   joinDate: string;
@@ -142,7 +143,7 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
 
   const { data: users, error: usersError } = await serviceClient
     .from("users")
-    .select("id, full_name, email, avatar_url, last_sign_in_at")
+    .select("id, full_name, name, email, avatar_url, last_sign_in_at")
     .in("id", userIds);
 
   console.log("[getTeamMembers] Users query:", {
@@ -159,7 +160,7 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
     const userData: any = usersMap.get(au.user_id) || {};
     return {
       id: au.user_id,
-      name: userData.full_name || "Unknown",
+      name: userData.full_name || userData.name || userData.email?.split("@")[0] || "Unknown",
       email: userData.email || "",
       role: au.role,
       status: "Active",
@@ -283,7 +284,7 @@ export async function inviteTeamMember(data: {
   // Get inviter's name
   const { data: inviterData } = await serviceClient
     .from("users")
-    .select("full_name")
+    .select("full_name, name")
     .eq("id", user.id)
     .single();
 
@@ -402,7 +403,7 @@ export async function inviteTeamMember(data: {
     email: data.email,
     role: data.role,
     agency_id: agencyId,
-    invited_by_name: inviterData?.full_name || "Unknown",
+    invited_by_name: inviterData?.full_name || inviterData?.name || "Unknown",
     token: hashedToken,
     status: "pending",
     expires_at: expiresAt.toISOString(),
@@ -428,7 +429,7 @@ export async function inviteTeamMember(data: {
   // Send invitation email with the auth link
   const emailResult = await sendInvitationEmailWithUrl({
     email: data.email,
-    inviterName: inviterData?.full_name || "A team member",
+    inviterName: inviterData?.full_name || inviterData?.name || "A team member",
     agencyName: agencyData?.name || "the organization",
     role: data.role,
     inviteUrl,
@@ -720,6 +721,50 @@ export async function updateTeamMemberRole(userId: string, newRole: string) {
 
   if (error) {
     throw new Error("Failed to update role");
+  }
+
+  revalidatePath("/admin/team-management");
+  return { success: true };
+}
+
+// Update team member job role
+export async function updateTeamMemberJobRole(userId: string, jobRole: string | null) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Get user's agency_id
+  const { data: currentUserAgency } = await serviceClient
+    .from("agency_users")
+    .select("agency_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  const agencyId = currentUserAgency?.agency_id;
+  if (!agencyId) throw new Error("User not associated with an agency");
+
+  // Only admins can change job roles
+  if (currentUserAgency.role !== "agency_admin" && currentUserAgency.role !== "super_admin") {
+    throw new Error("Only administrators can change job roles");
+  }
+
+  const { error } = await serviceClient
+    .from("agency_users")
+    .update({ job_role: jobRole })
+    .eq("user_id", userId)
+    .eq("agency_id", agencyId);
+
+  if (error) {
+    throw new Error("Failed to update job role");
   }
 
   revalidatePath("/admin/team-management");

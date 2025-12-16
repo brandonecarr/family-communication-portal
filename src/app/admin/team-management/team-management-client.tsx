@@ -45,6 +45,7 @@ import {
   resendInvitation,
   cancelInvitation,
   updateTeamMemberRole,
+  updateTeamMemberJobRole,
   removeTeamMember,
   type TeamMember,
   type TeamInvitation,
@@ -72,6 +73,18 @@ const roleLabels: Record<string, string> = {
   family_admin: "Family Admin",
   family_member: "Family Member",
 };
+
+const jobRoleOptions = [
+  { value: "Admin", label: "Admin" },
+  { value: "RN", label: "RN" },
+  { value: "LVN/LPN", label: "LVN/LPN" },
+  { value: "HHA", label: "HHA" },
+  { value: "MSW", label: "MSW" },
+  { value: "Chaplain", label: "Chaplain" },
+  { value: "MD", label: "MD" },
+  { value: "Care Coordinator", label: "Care Coordinator" },
+  { value: "NP", label: "NP" },
+];
 
 const permissions = [
   { name: "View Dashboard", admin: true, staff: true },
@@ -121,6 +134,7 @@ export default function TeamManagementClient({
   // Dialog states
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [editRoleDialogOpen, setEditRoleDialogOpen] = useState(false);
+  const [editJobRoleDialogOpen, setEditJobRoleDialogOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   
@@ -128,6 +142,7 @@ export default function TeamManagementClient({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("agency_staff");
   const [newRole, setNewRole] = useState("");
+  const [newJobRole, setNewJobRole] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   const isAdmin = currentUserRole === "agency_admin" || currentUserRole === "super_admin";
@@ -273,6 +288,38 @@ export default function TeamManagementClient({
     }
   };
 
+  const handleEditJobRole = async () => {
+    if (!selectedMember) return;
+
+    setLoading(true);
+    try {
+      await updateTeamMemberJobRole(selectedMember.id, newJobRole || null);
+      
+      setTeamMembers(prev =>
+        prev.map(m =>
+          m.id === selectedMember.id ? { ...m, jobRole: newJobRole || null } : m
+        )
+      );
+      
+      toast({
+        title: "Success",
+        description: "Job role updated successfully",
+      });
+      
+      setEditJobRoleDialogOpen(false);
+      setSelectedMember(null);
+      setNewJobRole("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update job role",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRemoveMember = async () => {
     if (!selectedMember) return;
 
@@ -304,6 +351,12 @@ export default function TeamManagementClient({
     setSelectedMember(member);
     setNewRole(member.role);
     setEditRoleDialogOpen(true);
+  };
+
+  const openEditJobRoleDialog = (member: TeamMember) => {
+    setSelectedMember(member);
+    setNewJobRole(member.jobRole || "");
+    setEditJobRoleDialogOpen(true);
   };
 
   const openRemoveDialog = (member: TeamMember) => {
@@ -447,6 +500,11 @@ export default function TeamManagementClient({
                     >
                       {roleLabels[member.role] || member.role}
                     </Badge>
+                    {member.jobRole && (
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {member.jobRole}
+                      </Badge>
+                    )}
                     <Badge
                       className={
                         member.status === "Active"
@@ -475,6 +533,13 @@ export default function TeamManagementClient({
                       >
                         <Edit className="h-4 w-4" />
                         Edit Role
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="gap-2"
+                        onClick={() => openEditJobRoleDialog(member)}
+                      >
+                        <Shield className="h-4 w-4" />
+                        Assign Job Role
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="gap-2 text-red-600 focus:text-red-600"
@@ -691,6 +756,50 @@ export default function TeamManagementClient({
             <Button
               onClick={handleEditRole}
               disabled={loading || !newRole}
+              className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white"
+            >
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Job Role Dialog */}
+      <Dialog open={editJobRoleDialogOpen} onOpenChange={setEditJobRoleDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: "Fraunces, serif" }}>
+              Assign Job Role
+            </DialogTitle>
+            <DialogDescription>
+              Assign a job role for {selectedMember?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newJobRole">Job Role</Label>
+              <Select value={newJobRole || "none"} onValueChange={(val) => setNewJobRole(val === "none" ? "" : val)}>
+                <SelectTrigger className="bg-[#FAF8F5] border-none">
+                  <SelectValue placeholder="Select a job role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {jobRoleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditJobRoleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditJobRole}
+              disabled={loading}
               className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white"
             >
               {loading ? "Saving..." : "Save Changes"}
