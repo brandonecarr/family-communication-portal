@@ -179,7 +179,7 @@ export default function MessagesClientNew({
           schema: "public",
           table: "message_read_receipts",
         },
-        async (payload) => {
+        async (payload: any) => {
           // Check if this read receipt is for a message in the current thread
           const messageId = payload.new?.message_id || payload.old?.message_id;
           if (messageId) {
