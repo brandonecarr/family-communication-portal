@@ -282,7 +282,7 @@ export async function inviteFamilyMemberAction(formData: FormData) {
       },
     });
     
-    console.log("[FAMILY INVITE] Email function response:", { data: emailData, error: emailError });
+    console.log("[FAMILY INVITE] Email sent successfully:", { messageId: emailData?.messageId });
     
     if (emailError) {
       console.error("[FAMILY INVITE] Error sending invitation email:", emailError);

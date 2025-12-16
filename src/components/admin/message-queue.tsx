@@ -22,6 +22,13 @@ interface ThreadMessage {
   };
 }
 
+interface Participant {
+  id: string;
+  full_name: string | null;
+  name: string | null;
+  email: string;
+}
+
 interface MessageThread {
   id: string;
   subject: string | null;
@@ -31,12 +38,14 @@ interface MessageThread {
   is_group: boolean;
   unread_count: number;
   last_message: ThreadMessage | null;
+  participants?: Participant[];
 }
 
 export default function MessageQueue() {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const supabase = createClient();
   const retryCount = useRef(0);
@@ -56,6 +65,8 @@ export default function MessageQueue() {
         setLoading(false);
         return;
       }
+      
+      setCurrentUserId(user.id);
 
       // Get threads where user is a participant
       const { data: participantThreads, error: threadsError } = await supabase
@@ -150,10 +161,28 @@ export default function MessageQueue() {
             sender: senderData || { full_name: null, name: null, email: '' }
           } : null;
 
+          // Get participants for this thread
+          const { data: participants } = await supabase
+            .from("thread_participants")
+            .select("user_id")
+            .eq("thread_id", thread.id);
+
+          // Get user details for participants
+          let participantUsers: any[] = [];
+          if (participants && participants.length > 0) {
+            const participantIds = participants.map(p => p.user_id);
+            const { data: users } = await supabase
+              .from("users")
+              .select("id, full_name, name, email")
+              .in("id", participantIds);
+            participantUsers = users || [];
+          }
+
           return {
             ...thread,
             last_message: transformedMessage,
             unread_count: unreadCount || 0,
+            participants: participantUsers,
           };
         })
       );
@@ -288,7 +317,21 @@ export default function MessageQueue() {
             No recent messages
           </div>
         ) : (
-          threads.map((thread) => (
+          threads.map((thread) => {
+            // Get the other participant's name (not the current user)
+            const otherParticipants = thread.participants?.filter(p => p.id !== currentUserId) || [];
+            const displayName = otherParticipants.length > 0
+              ? otherParticipants[0].full_name || otherParticipants[0].name || otherParticipants[0].email
+              : thread.participants?.[0]?.full_name || thread.participants?.[0]?.name || "Unknown";
+            
+            // Truncate message preview to 30 characters
+            const messagePreview = thread.last_message?.body 
+              ? thread.last_message.body.length > 30 
+                ? thread.last_message.body.substring(0, 30) + "..."
+                : thread.last_message.body
+              : "";
+            
+            return (
             <Link key={thread.id} href="/admin/messages">
               <div
                 className="p-4 rounded-xl border bg-card hover:bg-[#7A9B8E]/5 transition-colors cursor-pointer"
@@ -297,7 +340,7 @@ export default function MessageQueue() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-semibold text-sm truncate">
-                        {thread.subject || "No Subject"}
+                        {displayName}
                       </h4>
                       {thread.unread_count > 0 && (
                         <Badge variant="default" className="bg-[#7A9B8E] text-white text-xs px-2 py-0">
@@ -307,12 +350,7 @@ export default function MessageQueue() {
                     </div>
                     {thread.last_message && (
                       <p className="text-sm text-muted-foreground line-clamp-1">
-                        <span className="font-medium">
-                          {thread.last_message.sender?.full_name || 
-                           thread.last_message.sender?.name || 
-                           thread.last_message.sender?.email}:
-                        </span>{" "}
-                        {thread.last_message.body}
+                        {messagePreview}
                       </p>
                     )}
                   </div>
@@ -337,7 +375,8 @@ export default function MessageQueue() {
                 </div>
               </div>
             </Link>
-          ))
+          );
+          })
         )}
       </CardContent>
     </Card>

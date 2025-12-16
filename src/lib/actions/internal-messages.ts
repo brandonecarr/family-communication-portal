@@ -69,13 +69,38 @@ async function getUserAgencyId(supabase: any): Promise<string | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // First check agency_users (for staff/admin)
   const { data: agencyUser } = await supabase
     .from("agency_users")
     .select("agency_id")
     .eq("user_id", user.id)
     .single();
 
-  return agencyUser?.agency_id || null;
+  if (agencyUser?.agency_id) {
+    return agencyUser.agency_id;
+  }
+
+  // If not found, check family_members (for family portal users)
+  // Get the patient_id first, then get the patient's agency_id
+  const { data: familyMember } = await supabase
+    .from("family_members")
+    .select("patient_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (familyMember?.patient_id) {
+    const { data: patient } = await supabase
+      .from("patients")
+      .select("agency_id")
+      .eq("id", familyMember.patient_id)
+      .single();
+    
+    if (patient?.agency_id) {
+      return patient.agency_id;
+    }
+  }
+
+  return null;
 }
 
 // Helper to check if user is staff (not family member)
@@ -200,45 +225,56 @@ export async function getMessageThreads(
     participantsByThread.set(p.thread_id, existing);
   });
 
-  // Get unread counts and last message preview for each thread
-  // Use service client to bypass RLS for message preview since we've already verified thread access
+  // Batch fetch all messages for all threads at once (much faster than N+1 queries)
   const serviceClient = await createServiceClient();
-  const threadsWithUnread = await Promise.all(
-    threads.map(async (thread: any) => {
-      // Get all messages in thread using service client (or fall back to regular client)
-      const queryClient = serviceClient || supabase;
-      const { data: threadMessages, error: messagesError } = await queryClient
-        .from("thread_messages")
-        .select("id, body")
-        .eq("thread_id", thread.id)
-        .order("created_at", { ascending: false });
-      
-      if (messagesError) {
-        console.error("Error fetching thread messages:", messagesError);
-      }
+  const queryClient = serviceClient || supabase;
+  
+  const { data: allMessages, error: messagesError } = await queryClient
+    .from("thread_messages")
+    .select("id, body, sender_id, thread_id, created_at")
+    .in("thread_id", threads.map((t: any) => t.id))
+    .order("created_at", { ascending: false });
+  
+  if (messagesError) {
+    console.error("Error fetching thread messages:", messagesError);
+  }
 
-      // Get read receipts for this user
-      const { data: readReceipts } = await supabase
-        .from("message_read_receipts")
-        .select("message_id")
-        .eq("user_id", user.id);
+  // Batch fetch all read receipts for this user at once
+  const { data: allReadReceipts } = await supabase
+    .from("message_read_receipts")
+    .select("message_id")
+    .eq("user_id", user.id);
 
-      const readMessageIds = new Set(readReceipts?.map((r: any) => r.message_id) || []);
-      const unreadCount = (threadMessages || []).filter(
-        (m: any) => !readMessageIds.has(m.id)
-      ).length;
+  const readMessageIds = new Set(allReadReceipts?.map((r: any) => r.message_id) || []);
 
-      // Get last message preview (first message since ordered desc)
-      const lastMessagePreview = threadMessages?.[0]?.body || null;
+  // Group messages by thread
+  const messagesByThread = new Map<string, any[]>();
+  (allMessages || []).forEach((m: any) => {
+    if (!messagesByThread.has(m.thread_id)) {
+      messagesByThread.set(m.thread_id, []);
+    }
+    messagesByThread.get(m.thread_id)!.push(m);
+  });
 
-      return {
-        ...thread,
-        participants: participantsByThread.get(thread.id) || [],
-        unread_count: unreadCount,
-        last_message_preview: lastMessagePreview,
-      };
-    })
-  );
+  // Build threads with unread counts and previews
+  const threadsWithUnread = threads.map((thread: any) => {
+    const threadMessages = messagesByThread.get(thread.id) || [];
+    
+    // Only count messages from others that haven't been read
+    const unreadCount = threadMessages.filter(
+      (m: any) => m.sender_id !== user.id && !readMessageIds.has(m.id)
+    ).length;
+
+    // Get last message preview (first message since already ordered desc)
+    const lastMessagePreview = threadMessages[0]?.body || null;
+
+    return {
+      ...thread,
+      participants: participantsByThread.get(thread.id) || [],
+      unread_count: unreadCount,
+      last_message_preview: lastMessagePreview,
+    };
+  });
 
   return threadsWithUnread;
 }
@@ -332,10 +368,43 @@ export async function getThreadWithMessages(threadId: string) {
   }
 
   const sendersMap = new Map(senderUsers.map((u: any) => [u.id, u]));
+  
+  // Get read receipts for all messages
+  const messageIds = (messages || []).map((m: any) => m.id);
+  let readReceiptsData: any[] = [];
+  
+  if (messageIds.length > 0) {
+    const { data: receipts } = await supabase
+      .from("message_read_receipts")
+      .select("message_id, user_id, read_at")
+      .in("message_id", messageIds);
+    
+    readReceiptsData = receipts || [];
+  }
+  
+  // Group read receipts by message_id, excluding the sender's own receipt
+  const receiptsByMessage = new Map<string, any[]>();
+  const messagesBySenderId = new Map((messages || []).map((m: any) => [m.id, m.sender_id]));
+  
+  readReceiptsData.forEach((receipt: any) => {
+    // Skip if this is the sender's own read receipt
+    const senderId = messagesBySenderId.get(receipt.message_id);
+    if (receipt.user_id === senderId) return;
+    
+    if (!receiptsByMessage.has(receipt.message_id)) {
+      receiptsByMessage.set(receipt.message_id, []);
+    }
+    receiptsByMessage.get(receipt.message_id)!.push({
+      user_id: receipt.user_id,
+      read_at: receipt.read_at,
+      user: usersMap.get(receipt.user_id) || null,
+    });
+  });
+  
   const messagesWithSenders = (messages || []).map((m: any) => ({
     ...m,
     sender: sendersMap.get(m.sender_id) || null,
-    read_receipts: [],
+    read_receipts: receiptsByMessage.get(m.id) || [],
   }));
 
   return {
@@ -525,11 +594,12 @@ export async function markThreadAsRead(threadId: string) {
 
   if (!user) throw new Error("Not authenticated");
 
-  // Get all unread messages in thread
+  // Get all unread messages in thread that were NOT sent by the current user
   const { data: messages } = await supabase
     .from("thread_messages")
     .select("id")
-    .eq("thread_id", threadId);
+    .eq("thread_id", threadId)
+    .neq("sender_id", user.id);
 
   if (messages && messages.length > 0) {
     const receipts = messages.map((m: any) => ({
@@ -760,6 +830,62 @@ export async function getAvailableRecipients(category: "internal" | "family") {
     }
   } catch (error) {
     console.error("Error in getAvailableRecipients:", error);
+    return [];
+  }
+}
+
+// Get care team members assigned to a specific patient (for family members to message)
+export async function getPatientCareTeamRecipients(patientId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+  if (!patientId) return [];
+
+  try {
+    // Get care team members assigned to this patient
+    const { data: patientCareTeam, error: careTeamError } = await supabase
+      .from("patient_care_team")
+      .select(`
+        care_team_member_id,
+        care_team_members (
+          id,
+          first_name,
+          last_name,
+          role,
+          email,
+          phone,
+          photo_url,
+          user_id
+        )
+      `)
+      .eq("patient_id", patientId);
+
+    if (careTeamError) {
+      console.error("Error fetching patient care team:", careTeamError);
+      return [];
+    }
+
+    // Map care team members to recipient format
+    const careTeamRecipients = (patientCareTeam || [])
+      .filter((pct: any) => pct.care_team_members && pct.care_team_members.user_id)
+      .map((pct: any) => {
+        const member = pct.care_team_members;
+        return {
+          id: member.user_id,
+          full_name: `${member.first_name} ${member.last_name}`.trim(),
+          email: member.email || "",
+          role: member.role || "Care Team",
+          avatar_url: member.photo_url || null,
+        };
+      })
+      .filter((r: any) => r.id !== user.id); // Exclude current user
+
+    return careTeamRecipients;
+  } catch (error) {
+    console.error("Error in getPatientCareTeamRecipients:", error);
     return [];
   }
 }

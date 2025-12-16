@@ -21,6 +21,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,7 +43,7 @@ import {
   createMessageThread,
   sendThreadMessage,
   markThreadAsRead,
-  getAvailableRecipients,
+  getPatientCareTeamRecipients,
   getArchivedThreads,
   type MessageThread,
   type ThreadMessage,
@@ -46,53 +52,80 @@ import {
 interface FamilyMessagesClientProps {
   currentUserId: string;
   patientId?: string;
+  initialThreads?: MessageThread[];
+  initialThreadMessages?: Record<string, ThreadMessage[]>;
 }
 
 export default function FamilyMessagesClient({
   currentUserId,
   patientId,
+  initialThreads = [],
+  initialThreadMessages = {},
 }: FamilyMessagesClientProps) {
   const { toast } = useToast();
   const supabase = createClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // State
-  const [threads, setThreads] = useState<MessageThread[]>([]);
+  // Initialize cache with server-fetched messages
+  const messagesCache = useRef<Map<string, ThreadMessage[]>>(
+    new Map(Object.entries(initialThreadMessages))
+  );
+
+  // State - initialize with server-fetched threads for instant display
+  const [threads, setThreads] = useState<MessageThread[]>(initialThreads);
   const [archivedThreads, setArchivedThreads] = useState<MessageThread[]>([]);
   const [selectedThread, setSelectedThread] = useState<MessageThread | null>(null);
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialThreads.length === 0);
   const [showArchived, setShowArchived] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
 
   // New conversation dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [availableRecipients, setAvailableRecipients] = useState<any[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
-  const [newThreadSubject, setNewThreadSubject] = useState("");
+
   const [initialMessage, setInitialMessage] = useState("");
   const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
 
-  // Load threads on mount
+  // Load threads on mount (skip if we have initial threads and not showing archived)
   useEffect(() => {
+    if (initialThreads.length > 0 && !showArchived) {
+      // Already have threads from server, no need to load
+      setLoading(false);
+      return;
+    }
     loadThreads();
   }, [showArchived]);
 
-  // Load messages when thread is selected
+  // Pre-fetch messages for all threads in background for instant loading
   useEffect(() => {
-    if (selectedThread) {
-      loadThreadMessages(selectedThread.id);
-    }
-  }, [selectedThread?.id]);
+    if (threads.length === 0) return;
+    
+    // Pre-fetch messages for threads that aren't cached yet (skip first one, already fetched)
+    threads.slice(1).forEach(async (thread) => {
+      if (!messagesCache.current.has(thread.id)) {
+        try {
+          const data = await getThreadWithMessages(thread.id);
+          messagesCache.current.set(thread.id, data.messages || []);
+        } catch (e) {
+          // Ignore errors, will fetch on demand
+        }
+      }
+    });
+  }, [threads]);
+
+  // Messages are now loaded in the click handler for faster response
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Real-time subscription for new messages
+  // Real-time subscription for new messages and read receipts
   useEffect(() => {
     if (!selectedThread) return;
 
@@ -108,6 +141,23 @@ export default function FamilyMessagesClient({
         },
         () => {
           loadThreadMessages(selectedThread.id);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_read_receipts",
+        },
+        async (payload) => {
+          // Check if this read receipt is for a message in the current thread
+          const messageId = payload.new?.message_id || payload.old?.message_id;
+          if (messageId) {
+            // Reload messages to get updated read receipts
+            const data = await getThreadWithMessages(selectedThread.id);
+            setMessages(data.messages || []);
+          }
         }
       )
       .subscribe();
@@ -144,13 +194,35 @@ export default function FamilyMessagesClient({
 
   const loadThreadMessages = async (threadId: string) => {
     try {
+      // Check cache first for instant display
+      const cachedMessages = messagesCache.current.get(threadId);
+      if (cachedMessages && cachedMessages.length > 0) {
+        setMessages(cachedMessages);
+        setMessagesLoading(false);
+      } else {
+        setMessagesLoading(true);
+      }
+      
+      // Fetch fresh data in background
       const data = await getThreadWithMessages(threadId);
-      setMessages(data.messages || []);
+      const newMessages = data.messages || [];
+      
+      // Update cache and state
+      messagesCache.current.set(threadId, newMessages);
+      setMessages(newMessages);
       setSelectedThread(data);
-      await markThreadAsRead(threadId);
-      loadThreads();
+      setMessagesLoading(false);
+      
+      // Mark as read in background (don't await)
+      markThreadAsRead(threadId).then(() => {
+        // Update thread list to reflect read status
+        setThreads(prev => prev.map(t => 
+          t.id === threadId ? { ...t, unread_count: 0 } : t
+        ));
+      });
     } catch (error) {
       console.error("Error loading messages:", error);
+      setMessagesLoading(false);
     }
   };
 
@@ -187,14 +259,12 @@ export default function FamilyMessagesClient({
     try {
       const thread = await createMessageThread({
         category: "family",
-        subject: newThreadSubject || undefined,
         participantIds: selectedRecipients,
         initialMessage: initialMessage || undefined,
       });
 
       setCreateDialogOpen(false);
       setSelectedRecipients([]);
-      setNewThreadSubject("");
       setInitialMessage("");
       setRecipientSearchQuery("");
 
@@ -216,8 +286,17 @@ export default function FamilyMessagesClient({
   };
 
   const handleOpenCreateDialog = async () => {
+    if (!patientId) {
+      toast({
+        title: "Error",
+        description: "Patient information not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const recipients = await getAvailableRecipients("family");
+      const recipients = await getPatientCareTeamRecipients(patientId);
       setAvailableRecipients(recipients);
       setCreateDialogOpen(true);
     } catch (error) {
@@ -243,12 +322,11 @@ export default function FamilyMessagesClient({
     (thread) => {
       if (!searchQuery) return true;
       const searchLower = searchQuery.toLowerCase();
-      const subject = thread.subject?.toLowerCase() || "";
       const participantNames =
         thread.participants
           ?.map((p: any) => p.user?.full_name?.toLowerCase() || "")
           .join(" ") || "";
-      return subject.includes(searchLower) || participantNames.includes(searchLower);
+      return participantNames.includes(searchLower);
     }
   );
 
@@ -262,7 +340,6 @@ export default function FamilyMessagesClient({
   });
 
   const getThreadDisplayName = (thread: MessageThread) => {
-    if (thread.subject) return thread.subject;
     const otherParticipants =
       thread.participants?.filter((p: any) => p.user_id !== currentUserId) || [];
     if (otherParticipants.length === 0) return "No participants";
@@ -343,7 +420,15 @@ export default function FamilyMessagesClient({
                   {filteredThreads.map((thread) => (
                     <div
                       key={thread.id}
-                      onClick={() => setSelectedThread(thread)}
+                      onClick={() => {
+                        setSelectedThread(thread);
+                        // Immediately show cached messages if available
+                        const cached = messagesCache.current.get(thread.id);
+                        if (cached) {
+                          setMessages(cached);
+                        }
+                        loadThreadMessages(thread.id);
+                      }}
                       className={`p-3 rounded-xl cursor-pointer transition-colors ${
                         selectedThread?.id === thread.id
                           ? "bg-[#7A9B8E]/10 border border-[#7A9B8E]/30"
@@ -362,7 +447,7 @@ export default function FamilyMessagesClient({
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-sm truncate">
+                            <h4 className={`text-sm truncate ${(thread.unread_count || 0) > 0 ? "font-semibold" : "font-medium"}`}>
                               {getThreadDisplayName(thread)}
                             </h4>
                             {(thread.unread_count || 0) > 0 && (
@@ -425,9 +510,21 @@ export default function FamilyMessagesClient({
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4">
+                {messagesLoading && messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full py-8">
+                    <div className="text-center text-muted-foreground">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7A9B8E] mx-auto mb-2"></div>
+                      <p className="text-sm">Loading messages...</p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="space-y-4">
                   {messages.map((message) => {
                     const isOwn = message.sender_id === currentUserId;
+                    const isGroupChat = (selectedThread?.participants?.length || 0) > 2;
+                    const readReceipts = message.read_receipts || [];
+                    const hasBeenRead = readReceipts.length > 0;
+                    
                     return (
                       <div
                         key={message.id}
@@ -446,15 +543,72 @@ export default function FamilyMessagesClient({
                             </p>
                           )}
                           <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-                          <div
-                            className={`flex items-center justify-end gap-1 mt-1 ${
-                              isOwn ? "text-white/70" : "text-muted-foreground"
-                            }`}
-                          >
-                            <span className="text-xs">
-                              {format(new Date(message.created_at), "h:mm a")}
+                          
+                          {/* Sent timestamp */}
+                          <div className="flex items-center justify-between gap-2 mt-2">
+                            <span className={`text-xs ${isOwn ? "text-white/70" : "text-muted-foreground"}`}>
+                              Sent on {format(new Date(message.created_at), "MMM d, yyyy")} at {format(new Date(message.created_at), "h:mm a")}
                             </span>
-                            {isOwn && <CheckCheck className="h-3 w-3" />}
+                            
+                            {/* Read receipts for own messages */}
+                            {isOwn && hasBeenRead && (
+                              <TooltipProvider>
+                                {isGroupChat ? (
+                                  // Group chat: show avatars of users who read
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex -space-x-2">
+                                        {readReceipts.slice(0, 3).map((receipt: any) => (
+                                          <Avatar key={receipt.user_id} className="h-5 w-5 border-2 border-white">
+                                            <AvatarFallback className="text-[8px] bg-[#B8A9D4]">
+                                              {receipt.user?.full_name?.charAt(0) || receipt.user?.email?.charAt(0) || "?"}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                        ))}
+                                        {readReceipts.length > 3 && (
+                                          <div className="h-5 w-5 rounded-full bg-[#B8A9D4] border-2 border-white flex items-center justify-center">
+                                            <span className="text-[8px] text-white">+{readReceipts.length - 3}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-xs">
+                                      <div className="space-y-1">
+                                        <p className="font-medium text-xs mb-2">Read by:</p>
+                                        {readReceipts.map((receipt: any) => (
+                                          <div key={receipt.user_id} className="text-xs">
+                                            <span className="font-medium">
+                                              {receipt.user?.full_name || receipt.user?.email || "Unknown"}
+                                            </span>
+                                            {receipt.read_at && (
+                                              <span className="text-muted-foreground">
+                                                {" "}on {format(new Date(receipt.read_at), "MMM d")} at {format(new Date(receipt.read_at), "h:mm a")}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  // One-on-one: show checkmark icon
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <CheckCheck className="h-3 w-3 text-white/90" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left">
+                                      {readReceipts[0]?.read_at ? (
+                                        <p className="text-xs">
+                                          Read on {format(new Date(readReceipts[0].read_at), "MMM d, yyyy")} at {format(new Date(readReceipts[0].read_at), "h:mm a")}
+                                        </p>
+                                      ) : (
+                                        <p className="text-xs">Read</p>
+                                      )}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TooltipProvider>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -462,6 +616,7 @@ export default function FamilyMessagesClient({
                   })}
                   <div ref={messagesEndRef} />
                 </div>
+                )}
               </ScrollArea>
 
               {/* Message Input */}
@@ -515,16 +670,6 @@ export default function FamilyMessagesClient({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Subject (optional)</Label>
-              <Input
-                placeholder="Enter a subject for this conversation"
-                value={newThreadSubject}
-                onChange={(e) => setNewThreadSubject(e.target.value)}
-                className="bg-[#FAF8F5] border-none"
-              />
-            </div>
-
             <div className="space-y-2">
               <Label>Select Recipients</Label>
               <div className="relative">

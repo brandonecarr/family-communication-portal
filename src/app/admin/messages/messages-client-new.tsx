@@ -69,11 +69,15 @@ import {
 interface MessagesClientProps {
   currentUserId: string;
   userRole: string;
+  initialThreads?: MessageThread[];
+  initialThreadMessages?: Record<string, ThreadMessage[]>;
 }
 
 export default function MessagesClientNew({
   currentUserId,
   userRole,
+  initialThreads = [],
+  initialThreadMessages = {},
 }: MessagesClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -85,11 +89,16 @@ export default function MessagesClientNew({
     userRole,
   );
 
+  // Initialize cache with server-fetched messages
+  const messagesCache = useRef<Map<string, ThreadMessage[]>>(
+    new Map(Object.entries(initialThreadMessages))
+  );
+
   // State - default to family tab for non-staff users
   const [activeTab, setActiveTab] = useState<"internal" | "family">(
     isStaff ? "internal" : "family",
   );
-  const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [threads, setThreads] = useState<MessageThread[]>(initialThreads);
   const [archivedThreads, setArchivedThreads] = useState<MessageThread[]>([]);
   const [selectedThread, setSelectedThread] = useState<MessageThread | null>(
     null,
@@ -98,38 +107,54 @@ export default function MessagesClientNew({
   const [searchQuery, setSearchQuery] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialThreads.length === 0);
   const [showArchived, setShowArchived] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
 
   // New conversation dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [availableRecipients, setAvailableRecipients] = useState<any[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
-  const [newThreadSubject, setNewThreadSubject] = useState("");
+
   const [initialMessage, setInitialMessage] = useState("");
   const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
   const [selectedPatientFilter, setSelectedPatientFilter] = useState<
     string | null
   >(null);
 
-  // Load threads on mount and tab change
+  // Load threads on mount and tab change (skip if we have initial threads)
   useEffect(() => {
+    if (initialThreads.length > 0 && !showArchived && activeTab === (isStaff ? "internal" : "family")) {
+      setLoading(false);
+      return;
+    }
     loadThreads();
   }, [activeTab, showArchived]);
 
-  // Load messages when thread is selected
+  // Pre-fetch messages for all threads in background
   useEffect(() => {
-    if (selectedThread) {
-      loadThreadMessages(selectedThread.id);
-    }
-  }, [selectedThread?.id]);
+    if (threads.length === 0) return;
+    
+    threads.slice(1).forEach(async (thread) => {
+      if (!messagesCache.current.has(thread.id)) {
+        try {
+          const data = await getThreadWithMessages(thread.id);
+          messagesCache.current.set(thread.id, data.messages || []);
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+    });
+  }, [threads]);
+
+  // Messages are now loaded in the click handler
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Real-time subscription for new messages
+  // Real-time subscription for new messages and read receipts
   useEffect(() => {
     if (!selectedThread) return;
 
@@ -145,6 +170,23 @@ export default function MessagesClientNew({
         },
         () => {
           loadThreadMessages(selectedThread.id);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_read_receipts",
+        },
+        async (payload) => {
+          // Check if this read receipt is for a message in the current thread
+          const messageId = payload.new?.message_id || payload.old?.message_id;
+          if (messageId) {
+            // Reload messages to get updated read receipts
+            const data = await getThreadWithMessages(selectedThread.id);
+            setMessages(data.messages || []);
+          }
         },
       )
       .subscribe();
@@ -180,14 +222,34 @@ export default function MessagesClientNew({
 
   const loadThreadMessages = async (threadId: string) => {
     try {
+      // Check cache first for instant display
+      const cachedMessages = messagesCache.current.get(threadId);
+      if (cachedMessages && cachedMessages.length > 0) {
+        setMessages(cachedMessages);
+        setMessagesLoading(false);
+      } else {
+        setMessagesLoading(true);
+      }
+      
+      // Fetch fresh data
       const data = await getThreadWithMessages(threadId);
-      setMessages(data.messages || []);
+      const newMessages = data.messages || [];
+      
+      // Update cache and state
+      messagesCache.current.set(threadId, newMessages);
+      setMessages(newMessages);
       setSelectedThread(data);
-      await markThreadAsRead(threadId);
-      // Refresh thread list to update unread counts
-      loadThreads();
+      setMessagesLoading(false);
+      
+      // Mark as read in background
+      markThreadAsRead(threadId).then(() => {
+        setThreads(prev => prev.map(t => 
+          t.id === threadId ? { ...t, unread_count: 0 } : t
+        ));
+      });
     } catch (error) {
       console.error("Error loading messages:", error);
+      setMessagesLoading(false);
     }
   };
 
@@ -224,14 +286,12 @@ export default function MessagesClientNew({
     try {
       const thread = await createMessageThread({
         category: activeTab,
-        subject: newThreadSubject || undefined,
         participantIds: selectedRecipients,
         initialMessage: initialMessage || undefined,
       });
 
       setCreateDialogOpen(false);
       setSelectedRecipients([]);
-      setNewThreadSubject("");
       setInitialMessage("");
       setRecipientSearchQuery("");
 
@@ -265,7 +325,6 @@ export default function MessagesClientNew({
       setSelectedPatientFilter(null);
       setRecipientSearchQuery("");
       setSelectedRecipients([]);
-      setNewThreadSubject("");
       setInitialMessage("");
       setCreateDialogOpen(true);
     } catch (error) {
@@ -326,14 +385,11 @@ export default function MessagesClientNew({
   const filteredThreads = (threadsList || []).filter((thread) => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
-    const subject = thread.subject?.toLowerCase() || "";
     const participantNames =
       thread.participants
         ?.map((p: any) => p.user?.full_name?.toLowerCase() || "")
         .join(" ") || "";
-    return (
-      subject.includes(searchLower) || participantNames.includes(searchLower)
-    );
+    return participantNames.includes(searchLower);
   });
 
   // Filter recipients by search and patient filter
@@ -372,7 +428,6 @@ export default function MessagesClientNew({
     }, []);
 
   const getThreadDisplayName = (thread: MessageThread) => {
-    if (thread.subject) return thread.subject;
     const otherParticipants =
       thread.participants?.filter((p: any) => p.user_id !== currentUserId) ||
       [];
@@ -492,7 +547,12 @@ export default function MessagesClientNew({
                       {filteredThreads.map((thread) => (
                         <div
                           key={thread.id}
-                          onClick={() => loadThreadMessages(thread.id)}
+                          onClick={() => {
+                            setSelectedThread(thread);
+                            const cached = messagesCache.current.get(thread.id);
+                            if (cached) setMessages(cached);
+                            loadThreadMessages(thread.id);
+                          }}
                           className={`p-3 rounded-xl cursor-pointer transition-colors ${
                             selectedThread?.id === thread.id
                               ? "bg-[#7A9B8E]/10 border border-[#7A9B8E]/30"
@@ -512,7 +572,7 @@ export default function MessagesClientNew({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <h4 className="font-medium text-sm truncate">
+                                  <h4 className={`text-sm truncate ${(thread.unread_count || 0) > 0 ? "font-semibold" : "font-medium"}`}>
                                     {getThreadDisplayName(thread)}
                                   </h4>
                                   {(thread.unread_count || 0) > 0 && (
@@ -664,6 +724,14 @@ export default function MessagesClientNew({
 
                   {/* Messages */}
                   <ScrollArea className="flex-1 p-4">
+                    {messagesLoading && messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full py-8">
+                        <div className="text-center text-muted-foreground">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7A9B8E] mx-auto mb-2"></div>
+                          <p className="text-sm">Loading messages...</p>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="space-y-4">
                       {messages.map((message) => {
                         const isOwn = message.sender_id === currentUserId;
@@ -710,6 +778,7 @@ export default function MessagesClientNew({
                       })}
                       <div ref={messagesEndRef} />
                     </div>
+                    )}
                   </ScrollArea>
 
                   {/* Message Input */}
@@ -784,7 +853,12 @@ export default function MessagesClientNew({
                       {filteredThreads.map((thread) => (
                         <div
                           key={thread.id}
-                          onClick={() => loadThreadMessages(thread.id)}
+                          onClick={() => {
+                            setSelectedThread(thread);
+                            const cached = messagesCache.current.get(thread.id);
+                            if (cached) setMessages(cached);
+                            loadThreadMessages(thread.id);
+                          }}
                           className={`p-3 rounded-xl cursor-pointer transition-colors ${
                             selectedThread?.id === thread.id
                               ? "bg-[#7A9B8E]/10 border border-[#7A9B8E]/30"
@@ -803,7 +877,7 @@ export default function MessagesClientNew({
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between">
-                                <h4 className="font-medium text-sm truncate">
+                                <h4 className={`text-sm truncate ${(thread.unread_count || 0) > 0 ? "font-semibold" : "font-medium"}`}>
                                   {getThreadDisplayName(thread)}
                                 </h4>
                                 {(thread.unread_count || 0) > 0 && (
@@ -950,6 +1024,14 @@ export default function MessagesClientNew({
 
                   {/* Messages */}
                   <ScrollArea className="flex-1 p-4">
+                    {messagesLoading && messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full py-8">
+                        <div className="text-center text-muted-foreground">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7A9B8E] mx-auto mb-2"></div>
+                          <p className="text-sm">Loading messages...</p>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="space-y-4">
                       {messages.map((message) => {
                         const isOwn = message.sender_id === currentUserId;
@@ -996,6 +1078,7 @@ export default function MessagesClientNew({
                       })}
                       <div ref={messagesEndRef} />
                     </div>
+                    )}
                   </ScrollArea>
 
                   {/* Message Input */}
@@ -1081,16 +1164,6 @@ export default function MessagesClientNew({
                     : "No patients found. Add patients first."}
                 </p>
               )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Subject (optional)</Label>
-              <Input
-                placeholder="Enter a subject for this conversation"
-                value={newThreadSubject}
-                onChange={(e) => setNewThreadSubject(e.target.value)}
-                className="bg-[#FAF8F5] border-none"
-              />
             </div>
 
             <div className="space-y-2">

@@ -5,13 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Clock, Users, Package, MessageSquare, UserPlus, Pencil } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Users, Package, MessageSquare, UserPlus, Pencil, Stethoscope } from "lucide-react";
 import { EditPatientDialog } from "@/components/admin/edit-patient-dialog";
 import { InviteFamilyMemberDialog } from "@/components/admin/invite-family-member-dialog";
 import { FamilyMemberCard } from "@/components/admin/family-member-card";
 import { CreateVisitDialog } from "@/components/admin/create-visit-dialog";
 import { EditVisitDialog } from "@/components/admin/edit-visit-dialog";
 import { DeleteVisitDialog } from "@/components/admin/delete-visit-dialog";
+import { PatientCareTeamTab } from "@/components/admin/patient-care-team-tab";
 
 export default async function PatientDetailsPage({
   params,
@@ -145,7 +146,7 @@ export default async function PatientDetailsPage({
 
       {/* Tabs for different sections */}
       <Tabs defaultValue="visits" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="visits">
             <Calendar className="h-4 w-4 mr-2" />
             Visits ({visits.length})
@@ -153,6 +154,10 @@ export default async function PatientDetailsPage({
           <TabsTrigger value="family">
             <Users className="h-4 w-4 mr-2" />
             Family ({familyMembers.length})
+          </TabsTrigger>
+          <TabsTrigger value="team">
+            <Stethoscope className="h-4 w-4 mr-2" />
+            Team
           </TabsTrigger>
           <TabsTrigger value="deliveries">
             <Package className="h-4 w-4 mr-2" />
@@ -255,6 +260,10 @@ export default async function PatientDetailsPage({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="team" className="space-y-4">
+          <PatientCareTeamTab patientId={params.id} agencyId={patient.agency_id} />
         </TabsContent>
 
         <TabsContent value="deliveries" className="space-y-4">

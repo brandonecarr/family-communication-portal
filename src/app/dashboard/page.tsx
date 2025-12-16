@@ -63,4 +63,7 @@ export default async function Dashboard() {
     // If no role is set, redirect to onboarding
     redirect("/onboarding");
   }
+  
+  // This return is never reached due to redirects above
+  return null;
 }
