@@ -32,6 +32,9 @@ export default function MessageThread({ patientId, currentUserId }: MessageThrea
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const MESSAGES_PER_PAGE = 50;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -69,17 +72,27 @@ export default function MessageThread({ patientId, currentUserId }: MessageThrea
     markMessagesAsRead();
   }, [messages]);
 
-  const fetchMessages = async () => {
+  const fetchMessages = async (loadMore = false) => {
     if (!patientId) return;
 
-    const { data } = await supabase
+    const from = loadMore ? messages.length : 0;
+    const to = from + MESSAGES_PER_PAGE - 1;
+
+    const { data, count } = await supabase
       .from("messages")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("patient_id", patientId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (data) {
-      setMessages(data);
+      const sortedData = [...data].reverse();
+      if (loadMore) {
+        setMessages(prev => [...sortedData, ...prev]);
+      } else {
+        setMessages(sortedData);
+      }
+      setHasMore(count ? (from + data.length) < count : false);
     }
   };
 

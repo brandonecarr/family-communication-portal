@@ -64,6 +64,9 @@ export default function PatientList() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const ITEMS_PER_PAGE = 20;
   const [newPatient, setNewPatient] = useState({
     first_name: "",
     last_name: "",
@@ -121,13 +124,17 @@ export default function PatientList() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [showArchived]);
+  }, [showArchived, currentPage]);
 
   const fetchPatients = async () => {
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
     let query = supabase
       .from("patients")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (!showArchived) {
       query = query.neq("status", "archived");
@@ -135,10 +142,13 @@ export default function PatientList() {
       query = query.eq("status", "archived");
     }
 
-    const { data } = await query;
+    const { data, count } = await query;
 
     if (data) {
       setPatients(data);
+    }
+    if (count !== null) {
+      setTotalCount(count);
     }
     setLoading(false);
   };
@@ -504,6 +514,36 @@ export default function PatientList() {
           ))
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!searchQuery && totalCount > ITEMS_PER_PAGE && (
+        <div className="flex items-center justify-between border-t pt-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} of {totalCount} patients
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div className="text-sm font-medium">
+              Page {currentPage} of {Math.ceil(totalCount / ITEMS_PER_PAGE)}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / ITEMS_PER_PAGE), p + 1))}
+              disabled={currentPage >= Math.ceil(totalCount / ITEMS_PER_PAGE)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Add Patient Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
