@@ -23,8 +23,6 @@ export default async function AdminTeamManagementPage() {
   
   if (!serviceClient) {
     console.error("[TeamManagement] Service client not available - SUPABASE_SERVICE_KEY may not be set");
-  } else {
-    console.log("[TeamManagement] Using service client (RLS bypassed)");
   }
   
   const dbClient = serviceClient || supabase;
@@ -35,13 +33,6 @@ export default async function AdminTeamManagementPage() {
     .select("agency_id, role")
     .eq("user_id", user.id)
     .single();
-
-  console.log("[TeamManagement] Current user agency lookup:", {
-    userId: user.id,
-    agencyId: currentUserAgency?.agency_id,
-    role: currentUserAgency?.role,
-    error: agencyError?.message,
-  });
 
   let agencyId = currentUserAgency?.agency_id;
   let userRole = currentUserAgency?.role || "agency_staff";
@@ -73,20 +64,11 @@ export default async function AdminTeamManagementPage() {
     return redirect("/sign-in");
   }
 
-  console.log("[TeamManagement] Starting data fetch for user:", user.id, "agency:", agencyId);
-
   // Fetch staff members directly - same approach as super admin facility page
   const { data: staffMembers, error: staffError } = await dbClient
     .from("agency_users")
     .select("user_id, role, job_role, created_at")
     .eq("agency_id", agencyId);
-
-  console.log("[TeamManagement] Staff query result:", {
-    agencyId,
-    staffCount: staffMembers?.length || 0,
-    error: staffError?.message,
-    usingServiceClient: !!serviceClient,
-  });
 
   // Fetch staff details from users table - MUST use service client to bypass RLS
   const staffWithDetails = await Promise.all(
@@ -97,13 +79,6 @@ export default async function AdminTeamManagementPage() {
         .select("id, full_name, name, email, avatar_url")
         .eq("id", staff.user_id)
         .single();
-      
-      console.log("[TeamManagement] User details for", staff.user_id, ":", {
-        full_name: userDetails?.full_name,
-        name: userDetails?.name,
-        email: userDetails?.email,
-        error: userError?.message,
-      });
       
       return {
         ...staff,
@@ -124,8 +99,6 @@ export default async function AdminTeamManagementPage() {
     avatar_url: staff.userDetails?.avatar_url,
   }));
 
-  console.log("[TeamManagement] Team members built:", teamMembers.length, teamMembers);
-
   // Fetch pending invitations
   const { data: invitations, error: invitationsError } = await dbClient
     .from("team_invitations")
@@ -133,12 +106,6 @@ export default async function AdminTeamManagementPage() {
     .eq("agency_id", agencyId)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
-
-  console.log("[TeamManagement] Invitations query result:", {
-    agencyId,
-    invitationsCount: invitations?.length || 0,
-    error: invitationsError?.message,
-  });
 
   // Get inviter names
   const inviterIds = Array.from(new Set((invitations || []).map((i: any) => i.invited_by).filter(Boolean))) as string[];
@@ -163,12 +130,6 @@ export default async function AdminTeamManagementPage() {
     created_at: inv.created_at,
     invited_by_name: inviterMap.get(inv.invited_by) || null,
   }));
-
-  console.log("[TeamManagement] Final data:", {
-    teamMembersCount: teamMembers.length,
-    pendingInvitationsCount: pendingInvitations.length,
-    agencyId,
-  });
 
   return (
     <Suspense
