@@ -569,7 +569,7 @@ export default function MessagesClientNew({
                             >
                               {!isOwn && (
                                 <p className="text-xs font-medium mb-1 text-[#7A9B8E]">
-                                  {message.sender?.full_name || message.sender?.name || message.sender?.email || "Unknown"}
+                                  {message.sender?.full_name || message.sender?.email || "Unknown"}
                                 </p>
                               )}
                               <p className="text-sm whitespace-pre-wrap">{message.body}</p>
@@ -783,7 +783,7 @@ export default function MessagesClientNew({
                             >
                               {!isOwn && (
                                 <p className="text-xs font-medium mb-1 text-[#B8A9D4]">
-                                  {message.sender?.full_name || message.sender?.name || message.sender?.email || "Unknown"}
+                                  {message.sender?.full_name || message.sender?.email || "Unknown"}
                                 </p>
                               )}
                               <p className="text-sm whitespace-pre-wrap">{message.body}</p>
