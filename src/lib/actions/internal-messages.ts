@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "../../../supabase/server";
+import { createClient, createServiceClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 
 // Types
@@ -616,8 +616,14 @@ export async function getAvailableRecipients(category: "internal" | "family") {
         };
       });
 
-      // Get family members
-      const { data: familyMembers, error: familyError } = await supabase
+      // Get family members using service client to bypass RLS
+      const serviceClient = await createServiceClient();
+      if (!serviceClient) {
+        console.error("Service client not available");
+        return staffUsers;
+      }
+      
+      const { data: familyMembers, error: familyError } = await serviceClient
         .from("family_members")
         .select("user_id, name, email, patient_id, relationship, status")
         .not("user_id", "is", null)
@@ -634,7 +640,7 @@ export async function getAvailableRecipients(category: "internal" | "family") {
       let patientsData: any[] = [];
       
       if (patientIds.length > 0) {
-        const { data: patients } = await supabase
+        const { data: patients } = await serviceClient
           .from("patients")
           .select("id, agency_id, first_name, last_name")
           .in("id", patientIds);
