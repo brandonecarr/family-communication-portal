@@ -150,14 +150,14 @@ export function EditFacilityForm({ facility }: EditFacilityFormProps) {
               <SelectValue placeholder="Select patient tier" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1-25">1-25 patients - $250/month</SelectItem>
-              <SelectItem value="26-50">26-50 patients - $500/month</SelectItem>
-              <SelectItem value="51-75">51-75 patients - $750/month</SelectItem>
-              <SelectItem value="76-100">76-100 patients - $1,000/month</SelectItem>
-              <SelectItem value="101-125">101-125 patients - $1,250/month</SelectItem>
-              <SelectItem value="126-150">126-150 patients - $1,500/month</SelectItem>
-              <SelectItem value="151-175">151-175 patients - $1,750/month</SelectItem>
-              <SelectItem value="176-200">176-200 patients - $2,000/month</SelectItem>
+              <SelectItem value="1-25">1-25 patients - $500/month</SelectItem>
+              <SelectItem value="26-50">26-50 patients - $1,000/month</SelectItem>
+              <SelectItem value="51-75">51-75 patients - $1,500/month</SelectItem>
+              <SelectItem value="76-100">76-100 patients - $2,000/month</SelectItem>
+              <SelectItem value="101-125">101-125 patients - $2,500/month</SelectItem>
+              <SelectItem value="126-150">126-150 patients - $3,000/month</SelectItem>
+              <SelectItem value="151-175">151-175 patients - $3,500/month</SelectItem>
+              <SelectItem value="176-200">176-200 patients - $4,000/month</SelectItem>
               <SelectItem value="201+">201+ patients - Custom pricing</SelectItem>
             </SelectContent>
           </Select>

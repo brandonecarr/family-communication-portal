@@ -46,22 +46,22 @@ export const revalidate = 0;
 
 function getPricingForTier(tier: string): string {
   const pricing: Record<string, string> = {
-    "1-25": "$250/month",
-    "26-50": "$500/month",
-    "51-75": "$750/month",
-    "76-100": "$1,000/month",
-    "101-125": "$1,250/month",
-    "126-150": "$1,500/month",
-    "151-175": "$1,750/month",
-    "176-200": "$2,000/month",
+    "1-25": "$500/month",
+    "26-50": "$1,000/month",
+    "51-75": "$1,500/month",
+    "76-100": "$2,000/month",
+    "101-125": "$2,500/month",
+    "126-150": "$3,000/month",
+    "151-175": "$3,500/month",
+    "176-200": "$4,000/month",
     "201+": "Custom pricing",
     // Legacy tiers
-    basic: "$250/month",
-    standard: "$500/month",
-    premium: "$1,000/month",
+    basic: "$500/month",
+    standard: "$1,000/month",
+    premium: "$2,000/month",
     enterprise: "Custom pricing",
   };
-  return pricing[tier] || "$250/month";
+  return pricing[tier] || "$500/month";
 }
 
 export default async function FacilityDetailPage({
