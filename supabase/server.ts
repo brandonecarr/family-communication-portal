@@ -59,9 +59,18 @@ export const createServiceClient = () => {
   const key = process.env.SUPABASE_SERVICE_KEY;
   
   if (!url || !key) {
-    console.warn("Supabase service credentials not available");
+    console.error("[createServiceClient] Missing credentials - URL:", !!url, "KEY:", !!key);
     return null;
   }
   
-  return createSupabaseClient(url, key);
+  // Service client with service_role key bypasses RLS
+  return createSupabaseClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    db: {
+      schema: 'public'
+    }
+  });
 };

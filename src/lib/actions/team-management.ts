@@ -78,7 +78,7 @@ export interface TeamInvitation {
 }
 
 // Get all team members for the current user's agency
-export async function getTeamMembers(): Promise<TeamMember[]> {
+export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMember[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -86,27 +86,39 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
 
   if (!user) throw new Error("Not authenticated");
 
-  // Get user's agency_id
-  const { data: currentUserAgency } = await supabase
-    .from("agency_users")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .single();
-
-  const agencyId = currentUserAgency?.agency_id;
-  if (!agencyId) {
-    console.log("[DEBUG] No agency_id found for user");
-    return [];
-  }
-
-  console.log(`[DEBUG] Fetching team members for agency ${agencyId}`);
-
-  // Use service client to bypass RLS for fetching team members
-  const serviceClient = await createServiceClient();
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
   if (!serviceClient) {
-    console.error("Service client not available");
+    console.error("[getTeamMembers] Service client not available");
     return [];
   }
+
+  let agencyId = passedAgencyId;
+
+  // If no agency ID passed, get it from agency_users
+  if (!agencyId) {
+    // Get user's agency_id using service client
+    const { data: currentUserAgency, error: agencyError } = await serviceClient
+      .from("agency_users")
+      .select("agency_id")
+      .eq("user_id", user.id)
+      .single();
+
+    console.log("[getTeamMembers] Current user agency:", {
+      userId: user.id,
+      agencyId: currentUserAgency?.agency_id,
+      error: agencyError?.message,
+    });
+
+    agencyId = currentUserAgency?.agency_id;
+  }
+
+  if (!agencyId) {
+    console.error("[getTeamMembers] No agency ID found for user");
+    return [];
+  }
+
+  console.log("[getTeamMembers] Fetching team members for agency:", agencyId);
 
   // Fetch all team members for this agency
   const { data: agencyUsers, error: agencyUsersError } = await serviceClient
@@ -115,16 +127,16 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
     .eq("agency_id", agencyId)
     .order("created_at", { ascending: false });
 
-  if (agencyUsersError) {
-    console.error("[DEBUG] Error fetching agency_users:", agencyUsersError);
-  }
-
-  console.log(`[DEBUG] Found ${(agencyUsers || []).length} agency_users records`);
+  console.log("[getTeamMembers] Agency users query:", {
+    agencyId,
+    count: agencyUsers?.length || 0,
+    error: agencyUsersError?.message,
+  });
 
   // Get user details for all team members
   const userIds = (agencyUsers || []).map((au: any) => au.user_id);
   if (userIds.length === 0) {
-    console.log("[DEBUG] No user_ids found in agency_users");
+    console.log("[getTeamMembers] No user IDs found");
     return [];
   }
 
@@ -133,11 +145,11 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
     .select("id, full_name, email, avatar_url, last_sign_in_at")
     .in("id", userIds);
 
-  if (usersError) {
-    console.error("[DEBUG] Error fetching users:", usersError);
-  }
-
-  console.log(`[DEBUG] Found ${(users || []).length} users records`);
+  console.log("[getTeamMembers] Users query:", {
+    userIdsCount: userIds.length,
+    usersCount: users?.length || 0,
+    error: usersError?.message,
+  });
 
   if (!users) return [];
 
@@ -159,7 +171,7 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
 }
 
 // Get pending invitations for the current user's agency
-export async function getPendingInvitations(): Promise<TeamInvitation[]> {
+export async function getPendingInvitations(passedAgencyId?: string): Promise<TeamInvitation[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -167,20 +179,31 @@ export async function getPendingInvitations(): Promise<TeamInvitation[]> {
 
   if (!user) throw new Error("Not authenticated");
 
-  // Get user's agency_id
-  const { data: currentUserAgency } = await supabase
-    .from("agency_users")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .single();
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    console.error("Service client not available");
+    return [];
+  }
 
-  const agencyId = currentUserAgency?.agency_id;
+  let agencyId = passedAgencyId;
+
+  // If no agency ID passed, get it from agency_users
+  if (!agencyId) {
+    // Get user's agency_id using service client
+    const { data: currentUserAgency } = await serviceClient
+      .from("agency_users")
+      .select("agency_id")
+      .eq("user_id", user.id)
+      .single();
+
+    agencyId = currentUserAgency?.agency_id;
+  }
+
   if (!agencyId) return [];
 
-  console.log(`[DEBUG] Fetching pending invitations for agency ${agencyId}`);
-
-  // Fetch pending invitations
-  const { data: invitations, error } = await supabase
+  // Fetch pending invitations using service client
+  const { data: invitations, error } = await serviceClient
     .from("team_invitations")
     .select("*")
     .eq("agency_id", agencyId)
@@ -192,10 +215,8 @@ export async function getPendingInvitations(): Promise<TeamInvitation[]> {
     return [];
   }
 
-  console.log(`[DEBUG] Found ${invitations?.length || 0} pending invitations for agency ${agencyId}`);
-
   // Also fetch users who have been invited but haven't completed onboarding
-  const { data: pendingUsers } = await supabase
+  const { data: pendingUsers } = await serviceClient
     .from("users")
     .select("id, email, full_name, role, created_at")
     .eq("agency_id", agencyId)
@@ -243,8 +264,14 @@ export async function inviteTeamMember(data: {
 
   if (!user) throw new Error("Not authenticated");
 
-  // Get user's agency_id and name
-  const { data: currentUserAgency } = await supabase
+  // Use service client for operations that need to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Get user's agency_id and name using service client
+  const { data: currentUserAgency } = await serviceClient
     .from("agency_users")
     .select("agency_id")
     .eq("user_id", user.id)
@@ -254,14 +281,14 @@ export async function inviteTeamMember(data: {
   if (!agencyId) throw new Error("User not associated with an agency");
 
   // Get inviter's name
-  const { data: inviterData } = await supabase
+  const { data: inviterData } = await serviceClient
     .from("users")
     .select("full_name")
     .eq("id", user.id)
     .single();
 
   // Check if email is already invited
-  const { data: existingInvite } = await supabase
+  const { data: existingInvite } = await serviceClient
     .from("team_invitations")
     .select("id")
     .eq("email", data.email)
@@ -274,14 +301,14 @@ export async function inviteTeamMember(data: {
   }
 
   // Check if user already exists in the agency
-  const { data: existingUser } = await supabase
+  const { data: existingUser } = await serviceClient
     .from("users")
     .select("id")
     .eq("email", data.email)
     .single();
 
   if (existingUser) {
-    const { data: existingAgencyUser } = await supabase
+    const { data: existingAgencyUser } = await serviceClient
       .from("agency_users")
       .select("id")
       .eq("user_id", existingUser.id)
@@ -293,14 +320,6 @@ export async function inviteTeamMember(data: {
     }
   }
 
-  // Import service client to generate auth link
-  const { createServiceClient } = await import("../../../supabase/server");
-  const serviceClient = createServiceClient();
-  
-  if (!serviceClient) {
-    throw new Error("Service client not available");
-  }
-
   // Check if user exists in auth and delete them to get a fresh invite
   const { data: existingAuthUsers } = await serviceClient.auth.admin.listUsers();
   const existingAuthUser = existingAuthUsers?.users?.find(u => u.email === data.email);
@@ -310,7 +329,7 @@ export async function inviteTeamMember(data: {
     await serviceClient.auth.admin.deleteUser(existingAuthUser.id);
     
     // Also delete from users table
-    await supabase
+    await serviceClient
       .from("users")
       .delete()
       .eq("id", existingAuthUser.id);
@@ -346,7 +365,7 @@ export async function inviteTeamMember(data: {
 
   // Create user record if it was created
   if (linkData.user) {
-    const { error: userError } = await supabase
+    const { error: userError } = await serviceClient
       .from("users")
       .insert({
         id: linkData.user.id,
@@ -362,7 +381,7 @@ export async function inviteTeamMember(data: {
     }
 
     // Create agency_users relationship
-    const { error: agencyUserError } = await supabase
+    const { error: agencyUserError } = await serviceClient
       .from("agency_users")
       .insert({
         user_id: linkData.user.id,
@@ -379,7 +398,7 @@ export async function inviteTeamMember(data: {
   expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
 
   // Create invitation record with the auth token
-  const { error } = await supabase.from("team_invitations").insert({
+  const { error } = await serviceClient.from("team_invitations").insert({
     email: data.email,
     role: data.role,
     agency_id: agencyId,
@@ -397,7 +416,7 @@ export async function inviteTeamMember(data: {
   console.log(`[DEBUG] Created invitation for ${data.email} with agency_id ${agencyId}`);
 
   // Get agency name for the email
-  const { data: agencyData } = await supabase
+  const { data: agencyData } = await serviceClient
     .from("agencies")
     .select("name")
     .eq("id", agencyId)
@@ -434,8 +453,14 @@ export async function resendInvitation(invitationId: string) {
 
   if (!user) throw new Error("Not authenticated");
 
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
   // Get the invitation
-  const { data: invitation, error: fetchError } = await supabase
+  const { data: invitation, error: fetchError } = await serviceClient
     .from("team_invitations")
     .select("*")
     .eq("id", invitationId)
@@ -443,14 +468,6 @@ export async function resendInvitation(invitationId: string) {
 
   if (fetchError || !invitation) {
     throw new Error("Invitation not found");
-  }
-
-  // Import service client to generate new auth link
-  const { createServiceClient } = await import("../../../supabase/server");
-  const serviceClient = createServiceClient();
-  
-  if (!serviceClient) {
-    throw new Error("Service client not available");
   }
 
   // Check if user exists in auth and delete them to get a fresh invite
@@ -462,7 +479,7 @@ export async function resendInvitation(invitationId: string) {
     await serviceClient.auth.admin.deleteUser(existingUser.id);
     
     // Also delete from users table
-    await supabase
+    await serviceClient
       .from("users")
       .delete()
       .eq("id", existingUser.id);
@@ -497,7 +514,7 @@ export async function resendInvitation(invitationId: string) {
 
   // Create user record if it was created
   if (linkData.user) {
-    const { error: userError } = await supabase
+    const { error: userError } = await serviceClient
       .from("users")
       .insert({
         id: linkData.user.id,
@@ -512,7 +529,7 @@ export async function resendInvitation(invitationId: string) {
     }
 
     // Create agency_users relationship
-    const { error: agencyUserError } = await supabase
+    const { error: agencyUserError } = await serviceClient
       .from("agency_users")
       .insert({
         user_id: linkData.user.id,
@@ -529,7 +546,7 @@ export async function resendInvitation(invitationId: string) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const { error } = await supabase
+  const { error } = await serviceClient
     .from("team_invitations")
     .update({
       token: hashedToken,
@@ -543,7 +560,7 @@ export async function resendInvitation(invitationId: string) {
   }
 
   // Get agency name for the email
-  const { data: agencyData } = await supabase
+  const { data: agencyData } = await serviceClient
     .from("agencies")
     .select("name")
     .eq("id", invitation.agency_id)
@@ -641,7 +658,13 @@ export async function cancelInvitation(invitationId: string) {
 
   if (!user) throw new Error("Not authenticated");
 
-  const { error } = await supabase
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  const { error } = await serviceClient
     .from("team_invitations")
     .update({ status: "cancelled" })
     .eq("id", invitationId);
@@ -663,8 +686,14 @@ export async function updateTeamMemberRole(userId: string, newRole: string) {
 
   if (!user) throw new Error("Not authenticated");
 
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
   // Get user's agency_id
-  const { data: currentUserAgency } = await supabase
+  const { data: currentUserAgency } = await serviceClient
     .from("agency_users")
     .select("agency_id, role")
     .eq("user_id", user.id)
@@ -683,7 +712,7 @@ export async function updateTeamMemberRole(userId: string, newRole: string) {
     throw new Error("You cannot change your own role");
   }
 
-  const { error } = await supabase
+  const { error } = await serviceClient
     .from("agency_users")
     .update({ role: newRole })
     .eq("user_id", userId)
@@ -706,8 +735,14 @@ export async function removeTeamMember(userId: string) {
 
   if (!user) throw new Error("Not authenticated");
 
+  // Use service client to bypass RLS
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
   // Get user's agency_id
-  const { data: currentUserAgency } = await supabase
+  const { data: currentUserAgency } = await serviceClient
     .from("agency_users")
     .select("agency_id, role")
     .eq("user_id", user.id)
@@ -726,7 +761,7 @@ export async function removeTeamMember(userId: string) {
     throw new Error("You cannot remove yourself from the team");
   }
 
-  const { error } = await supabase
+  const { error } = await serviceClient
     .from("agency_users")
     .delete()
     .eq("user_id", userId)

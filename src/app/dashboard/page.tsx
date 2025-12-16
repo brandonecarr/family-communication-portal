@@ -3,7 +3,7 @@ import { createClient } from "../../../supabase/server";
 
 export const dynamic = "force-dynamic";
 
-async function getRedirectPath(): Promise<string> {
+export default async function Dashboard() {
   const supabase = await createClient();
 
   const {
@@ -11,7 +11,7 @@ async function getRedirectPath(): Promise<string> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return "/sign-in";
+    redirect("/sign-in");
   }
 
   // Check if user needs to complete onboarding (facility setup)
@@ -23,22 +23,22 @@ async function getRedirectPath(): Promise<string> {
   const { data: pendingInvite } = await supabase
     .from("facility_invites")
     .select("token, agency_id")
-    .eq("email", user.email)
+    .eq("email", user.email!)
     .eq("status", "pending")
     .maybeSingle();
 
   if (pendingInvite) {
-    return `/facility-setup?facility=${pendingInvite.agency_id}&token=${pendingInvite.token}`;
+    redirect(`/facility-setup?facility=${pendingInvite.agency_id}&token=${pendingInvite.token}`);
   }
 
   // Check if agency admin needs to complete facility setup
   if (needsPasswordSetup && agencyId && userRole === "agency_admin") {
-    return `/facility-setup?facility=${agencyId}`;
+    redirect(`/facility-setup?facility=${agencyId}`);
   }
 
   // Check if staff needs to complete onboarding
   if (needsPasswordSetup && agencyId) {
-    return `/accept-invite?facility=${agencyId}`;
+    redirect(`/accept-invite?facility=${agencyId}`);
   }
 
   // Check user role from user metadata or users table
@@ -52,18 +52,13 @@ async function getRedirectPath(): Promise<string> {
 
   // Route based on role
   if (role === "super_admin") {
-    return "/super-admin";
+    redirect("/super-admin");
   } else if (role === "agency_admin" || role === "agency_staff" || role === "admin") {
-    return "/admin";
+    redirect("/admin");
   } else if (role === "family_admin" || role === "family_member") {
-    return "/family";
+    redirect("/family");
   } else {
     // If no role is set, redirect to onboarding
-    return "/onboarding";
+    redirect("/onboarding");
   }
-}
-
-export default async function Dashboard() {
-  const redirectPath = await getRedirectPath();
-  redirect(redirectPath);
 }

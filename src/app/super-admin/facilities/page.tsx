@@ -1,4 +1,4 @@
-import { createClient } from "../../../../supabase/server";
+import { createClient, createServiceClient } from "../../../../supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +33,18 @@ import {
 import Link from "next/link";
 import { CreateFacilityForm } from "@/components/super-admin/create-facility-form";
 
+// Force dynamic rendering to ensure fresh data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function SuperAdminFacilitiesPage({
   searchParams,
 }: {
   searchParams: { action?: string; search?: string; status?: string };
 }) {
-  const supabase = await createClient();
+  // Use service client to bypass RLS for super admin operations
+  const serviceClient = createServiceClient();
+  const supabase = serviceClient || await createClient();
   const showCreateForm = searchParams.action === "create";
   const searchQuery = searchParams.search || "";
   const statusFilter = searchParams.status || "all";

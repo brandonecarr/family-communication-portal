@@ -1,4 +1,4 @@
-import { createClient } from "../../../../../supabase/server";
+import { createClient, createServiceClient } from "../../../../../supabase/server";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,10 @@ import { EditFacilityForm } from "@/components/super-admin/edit-facility-form";
 import { AddStaffForm } from "@/components/super-admin/add-staff-form";
 import { ResendInviteButton } from "@/components/super-admin/resend-invite-button";
 
+// Force dynamic rendering to ensure fresh data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function getPricingForTier(tier: string): string {
   const pricing: Record<string, string> = {
     "1-25": "$250/month",
@@ -67,7 +71,18 @@ export default async function FacilityDetailPage({
   params: { id: string };
   searchParams: { action?: string; tab?: string };
 }) {
-  const supabase = await createClient();
+  // Use service client to bypass RLS for super admin operations
+  const serviceClient = createServiceClient();
+  
+  // Log if service client is not available
+  if (!serviceClient) {
+    console.error("[FacilityDetail] Service client not available - SUPABASE_SERVICE_KEY may not be set");
+    console.error("[FacilityDetail] Falling back to regular client with RLS");
+  } else {
+    console.log("[FacilityDetail] Using service client (RLS bypassed)");
+  }
+  
+  const supabase = serviceClient || await createClient();
   const isEditing = searchParams.action === "edit";
   const activeTab = searchParams.tab || "overview";
   const showAddStaff = searchParams.action === "add-staff";
@@ -79,28 +94,36 @@ export default async function FacilityDetailPage({
     .eq("id", params.id)
     .single();
 
+  console.log("[FacilityDetail] Facility query:", {
+    facilityId: params.id,
+    facilityFound: !!facility,
+    facilityName: facility?.name,
+    error: error?.message
+  });
+
   if (error || !facility) {
     notFound();
   }
 
   // Fetch staff members
-  const { data: staffMembers } = await supabase
+  const { data: staffMembers, error: staffError } = await supabase
     .from("agency_users")
-    .select(`
-      *,
-      user:user_id (
-        id,
-        email
-      )
-    `)
+    .select("*")
     .eq("agency_id", params.id);
+
+  console.log("[FacilityDetail] Staff query result:", {
+    facilityId: params.id,
+    staffCount: staffMembers?.length || 0,
+    error: staffError?.message,
+    usingServiceClient: !!serviceClient
+  });
 
   // Fetch staff details from users table
   const staffWithDetails = await Promise.all(
     (staffMembers || []).map(async (staff: any) => {
       const { data: userDetails } = await supabase
         .from("users")
-        .select("name, email, role")
+        .select("full_name, email, role")
         .eq("id", staff.user_id)
         .single();
       return {
@@ -407,7 +430,7 @@ export default async function FacilityDetailPage({
                     {staffWithDetails.map((staff: any) => (
                       <TableRow key={staff.id}>
                         <TableCell className="font-medium">
-                          {staff.userDetails?.name || "Unknown"}
+                          {staff.userDetails?.full_name || "Unknown"}
                         </TableCell>
                         <TableCell>{staff.userDetails?.email || staff.user?.email || "N/A"}</TableCell>
                         <TableCell>
