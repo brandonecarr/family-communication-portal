@@ -119,16 +119,23 @@ export default function MessageQueue() {
               thread_id,
               body,
               created_at,
-              sender:sender_id (
-                full_name,
-                name,
-                email
-              )
+              sender_id
             `)
             .eq("thread_id", thread.id)
             .order("created_at", { ascending: false })
             .limit(1)
             .single();
+
+          // Get sender details separately if we have a message
+          let senderData = null;
+          if (lastMessage?.sender_id) {
+            const { data: sender } = await supabase
+              .from("users")
+              .select("full_name, name, email")
+              .eq("id", lastMessage.sender_id)
+              .single();
+            senderData = sender;
+          }
 
           // Count unread messages
           const { count: unreadCount } = await supabase
@@ -137,12 +144,10 @@ export default function MessageQueue() {
             .eq("thread_id", thread.id)
             .gt("created_at", participant?.last_read_at || "1970-01-01");
 
-          // Transform the sender from array to object (Supabase returns arrays for joins)
+          // Transform the message with sender data
           const transformedMessage = lastMessage ? {
             ...lastMessage,
-            sender: Array.isArray(lastMessage.sender) 
-              ? lastMessage.sender[0] || { full_name: null, name: null, email: '' }
-              : lastMessage.sender || { full_name: null, name: null, email: '' }
+            sender: senderData || { full_name: null, name: null, email: '' }
           } : null;
 
           return {
