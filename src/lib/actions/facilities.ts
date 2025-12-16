@@ -261,22 +261,30 @@ export async function updateFacility(id: string, formData: FormData) {
   const status = formData.get("status") as string;
   const subscription_tier = formData.get("subscription_tier") as string;
   const max_patients = parseInt(formData.get("max_patients") as string) || 25;
+  const admin_email_pending = formData.get("admin_email_pending") as string;
+
+  const updateData: any = {
+    name,
+    email,
+    phone,
+    address,
+    city,
+    state,
+    zip_code,
+    status,
+    subscription_tier,
+    max_patients,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Only update admin_email_pending if it was provided
+  if (admin_email_pending !== undefined && admin_email_pending !== null) {
+    updateData.admin_email_pending = admin_email_pending;
+  }
 
   const { data, error } = await supabase
     .from("agencies")
-    .update({
-      name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      zip_code,
-      status,
-      subscription_tier,
-      max_patients,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single();
@@ -284,6 +292,19 @@ export async function updateFacility(id: string, formData: FormData) {
   if (error) {
     console.error("Error updating facility:", error);
     return { data: null, error: error.message };
+  }
+
+  // If admin_email_pending was changed, update the facility_invites table
+  if (admin_email_pending && admin_email_pending.trim() !== "") {
+    const serviceClient = createServiceClient();
+    if (serviceClient) {
+      // Update the email in facility_invites table
+      await serviceClient
+        .from("facility_invites")
+        .update({ email: admin_email_pending })
+        .eq("agency_id", id)
+        .is("accepted_at", null); // Only update pending invites
+    }
   }
 
   revalidatePath("/super-admin");

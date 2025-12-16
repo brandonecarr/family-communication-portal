@@ -74,14 +74,6 @@ export default async function FacilityDetailPage({
   // Use service client to bypass RLS for super admin operations
   const serviceClient = createServiceClient();
   
-  // Log if service client is not available
-  if (!serviceClient) {
-    console.error("[FacilityDetail] Service client not available - SUPABASE_SERVICE_KEY may not be set");
-    console.error("[FacilityDetail] Falling back to regular client with RLS");
-  } else {
-    console.log("[FacilityDetail] Using service client (RLS bypassed)");
-  }
-  
   const supabase = serviceClient || await createClient();
   const isEditing = searchParams.action === "edit";
   const activeTab = searchParams.tab || "overview";
@@ -94,29 +86,15 @@ export default async function FacilityDetailPage({
     .eq("id", params.id)
     .single();
 
-  console.log("[FacilityDetail] Facility query:", {
-    facilityId: params.id,
-    facilityFound: !!facility,
-    facilityName: facility?.name,
-    error: error?.message
-  });
-
   if (error || !facility) {
     notFound();
   }
 
   // Fetch staff members
-  const { data: staffMembers, error: staffError } = await supabase
+  const { data: staffMembers } = await supabase
     .from("agency_users")
     .select("*")
     .eq("agency_id", params.id);
-
-  console.log("[FacilityDetail] Staff query result:", {
-    facilityId: params.id,
-    staffCount: staffMembers?.length || 0,
-    error: staffError?.message,
-    usingServiceClient: !!serviceClient
-  });
 
   // Fetch staff details from users table
   const staffWithDetails = await Promise.all(

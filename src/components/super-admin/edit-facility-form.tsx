@@ -31,6 +31,8 @@ interface Facility {
   max_patients?: number;
   max_staff?: number;
   status?: string;
+  admin_email_pending?: string;
+  onboarding_completed?: boolean;
 }
 
 interface EditFacilityFormProps {
@@ -96,6 +98,30 @@ export function EditFacilityForm({ facility }: EditFacilityFormProps) {
             className="bg-[#FAF8F5] border-[#E8E4DF]"
           />
         </div>
+        
+        {/* Admin Email Pending - Only show if facility hasn't completed onboarding */}
+        {!facility.onboarding_completed && (
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="admin_email_pending">
+              Invited Admin Email
+              <span className="text-xs text-muted-foreground ml-2">
+                (Change this if the email was entered incorrectly)
+              </span>
+            </Label>
+            <Input 
+              id="admin_email_pending" 
+              name="admin_email_pending" 
+              type="email"
+              defaultValue={facility.admin_email_pending || ""}
+              className="bg-amber-50 border-amber-200"
+              placeholder="admin@example.com"
+            />
+            <p className="text-xs text-amber-600">
+              Updating this email will allow you to resend the invitation to the correct address.
+            </p>
+          </div>
+        )}
+        
         <div className="space-y-2">
           <Label htmlFor="phone">Phone</Label>
           <Input 
