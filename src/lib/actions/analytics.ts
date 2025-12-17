@@ -2,18 +2,37 @@
 
 import { createClient } from "../../../supabase/server";
 
-// Helper to get current user's agency_id
-async function getUserAgencyId(supabase: any): Promise<string | null> {
+// Helper to get current user's agency_id and role
+async function getUserAgencyAndRole(supabase: any): Promise<{ agencyId: string | null; isSuperAdmin: boolean }> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { agencyId: null, isSuperAdmin: false };
   
+  // Check if user is super_admin
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  
+  const isSuperAdmin = userData?.role === 'super_admin';
+  
+  // Get agency_id from agency_users
   const { data: agencyUser } = await supabase
     .from("agency_users")
     .select("agency_id")
     .eq("user_id", user.id)
     .single();
   
-  return agencyUser?.agency_id || null;
+  return { 
+    agencyId: agencyUser?.agency_id || null, 
+    isSuperAdmin 
+  };
+}
+
+// Legacy helper for backward compatibility
+async function getUserAgencyId(supabase: any): Promise<string | null> {
+  const { agencyId } = await getUserAgencyAndRole(supabase);
+  return agencyId;
 }
 
 export async function trackEvent(eventData: {
@@ -43,16 +62,22 @@ export async function getAnalyticsEvents(
 ) {
   const supabase = await createClient();
   
-  // Get user's agency_id for filtering
-  const agencyId = await getUserAgencyId(supabase);
+  // Get user's agency_id and role for filtering
+  const { agencyId, isSuperAdmin } = await getUserAgencyAndRole(supabase);
+  
+  // CRITICAL: If user has no agency AND is not super_admin, return empty array
+  if (!agencyId && !isSuperAdmin) {
+    console.warn("User has no agency_id and is not super_admin - returning empty analytics list");
+    return [];
+  }
   
   let query = supabase
     .from("analytics_events")
     .select("*")
     .order("created_at", { ascending: false });
   
-  // Filter by agency if user belongs to one
-  if (agencyId) {
+  // Filter by agency unless user is super_admin
+  if (agencyId && !isSuperAdmin) {
     query = query.eq("agency_id", agencyId);
   }
   
@@ -77,13 +102,33 @@ export async function getAnalyticsEvents(
 export async function getAnalyticsSummary() {
   const supabase = await createClient();
   
+  // Get user's agency_id and role for filtering
+  const { agencyId, isSuperAdmin } = await getUserAgencyAndRole(supabase);
+  
+  // CRITICAL: If user has no agency AND is not super_admin, return empty summary
+  if (!agencyId && !isSuperAdmin) {
+    console.warn("User has no agency_id and is not super_admin - returning empty analytics summary");
+    return {
+      totalEvents: 0,
+      eventsByType: {},
+      eventsByDay: {},
+    };
+  }
+  
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   
-  const { data: events, error } = await supabase
+  let query = supabase
     .from("analytics_events")
     .select("event_type, created_at")
     .gte("created_at", thirtyDaysAgo.toISOString());
+  
+  // Filter by agency unless user is super_admin
+  if (agencyId && !isSuperAdmin) {
+    query = query.eq("agency_id", agencyId);
+  }
+  
+  const { data: events, error } = await query;
   
   if (error) throw error;
   
@@ -107,11 +152,27 @@ export async function getAnalyticsSummary() {
 export async function getAIInsights() {
   const supabase = await createClient();
   
-  const { data, error } = await supabase
+  // Get user's agency_id and role for filtering
+  const { agencyId, isSuperAdmin } = await getUserAgencyAndRole(supabase);
+  
+  // CRITICAL: If user has no agency AND is not super_admin, return empty array
+  if (!agencyId && !isSuperAdmin) {
+    console.warn("User has no agency_id and is not super_admin - returning empty AI insights");
+    return [];
+  }
+  
+  let query = supabase
     .from("ai_insights")
     .select("*")
     .eq("status", "active")
     .order("created_at", { ascending: false });
+  
+  // Filter by agency unless user is super_admin
+  if (agencyId && !isSuperAdmin) {
+    query = query.eq("agency_id", agencyId);
+  }
+  
+  const { data, error } = await query;
   
   if (error) throw error;
   return data;

@@ -208,7 +208,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
   };
 
   const filteredRequests = requests.filter((request) => {
-    const matchesSearch = 
+    const matchesSearch = searchTerm === "" || 
       request.patient?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.patient?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.requested_by_name?.toLowerCase().includes(searchTerm.toLowerCase());

@@ -3,25 +3,44 @@
 import { createClient } from "../../../supabase/server";
 import { revalidatePath } from "next/cache";
 
-// Helper to get current user's agency_id
-async function getUserAgencyId(supabase: any): Promise<string | null> {
+// Helper to get current user's agency_id and role
+async function getUserAgencyAndRole(supabase: any): Promise<{ agencyId: string | null; isSuperAdmin: boolean }> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { agencyId: null, isSuperAdmin: false };
   
+  // Check if user is super_admin
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  
+  const isSuperAdmin = userData?.role === 'super_admin';
+  
+  // Get agency_id from agency_users
   const { data: agencyUser } = await supabase
     .from("agency_users")
     .select("agency_id")
     .eq("user_id", user.id)
     .single();
   
-  return agencyUser?.agency_id || null;
+  return { 
+    agencyId: agencyUser?.agency_id || null, 
+    isSuperAdmin 
+  };
 }
 
 export async function getSupplyRequests(patientId?: string) {
   const supabase = await createClient();
   
-  // Get user's agency_id for filtering
-  const agencyId = await getUserAgencyId(supabase);
+  // Get user's agency_id and role for filtering
+  const { agencyId, isSuperAdmin } = await getUserAgencyAndRole(supabase);
+  
+  // CRITICAL: If user has no agency AND is not super_admin, return empty array
+  if (!agencyId && !isSuperAdmin) {
+    console.warn("User has no agency_id and is not super_admin - returning empty supply requests list");
+    return [];
+  }
   
   let query = supabase
     .from("supply_requests")
@@ -40,8 +59,8 @@ export async function getSupplyRequests(patientId?: string) {
     query = query.eq("patient_id", patientId);
   }
   
-  // Filter by agency if user belongs to one
-  if (agencyId) {
+  // Filter by agency unless user is super_admin
+  if (agencyId && !isSuperAdmin) {
     query = query.eq("patient.agency_id", agencyId);
   }
   
