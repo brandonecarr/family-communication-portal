@@ -13,7 +13,8 @@ import {
   Clock,
   User,
   Settings,
-  ClipboardList
+  ClipboardList,
+  Archive
 } from "lucide-react";
 import { SupplyRequestActions } from "@/components/admin/supply-request-actions";
 import { SupplyCatalogManagement } from "@/components/admin/supply-catalog-management";
@@ -33,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { X, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "../../../../supabase/client";
+import { archiveSupplyRequest } from "@/lib/actions/supplies";
 
 type SupplyRequest = {
   id: string;
@@ -114,9 +116,11 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [selectedItems, setSelectedItems] = useState<{name: string, quantity: number}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isArchiving, setIsArchiving] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(defaultSupplyItems);
   const [catalogCategories, setCatalogCategories] = useState<string[]>(["Personal Care", "Medical Supplies", "Comfort Items"]);
+  const [activeTab, setActiveTab] = useState("requests");
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -255,6 +259,11 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
 
       if (!response.ok) throw new Error("Failed to create delivery");
 
+      // Auto-archive the supply request if it exists
+      if (formData.supply_request_id) {
+        await archiveSupplyRequest(formData.supply_request_id);
+      }
+
       setShowDeliveryDialog(false);
       setSelectedItems([]);
       setFormData({
@@ -270,7 +279,7 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
       
       toast({
         title: "Delivery Created",
-        description: "The delivery has been successfully created.",
+        description: "The delivery has been successfully created and the request has been archived.",
       });
     } catch (error) {
       toast({
@@ -283,6 +292,25 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
     }
   };
 
+  const handleArchiveRequest = async (requestId: string) => {
+    setIsArchiving(requestId);
+    try {
+      await archiveSupplyRequest(requestId);
+      toast({
+        title: "Request Archived",
+        description: "The supply request has been archived successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to archive the request. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsArchiving(null);
+    }
+  };
+
   const filteredRequests = requests.filter((request) => {
     const matchesSearch = searchTerm === "" || 
       request.patient?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -291,7 +319,19 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
     
     const matchesStatus = statusFilter === "all" || request.status === statusFilter;
     
-    return matchesSearch && matchesStatus;
+    // Exclude archived requests from main view
+    const isNotArchived = request.status !== "archived";
+    
+    return matchesSearch && matchesStatus && isNotArchived;
+  });
+
+  const archivedRequests = requests.filter((request) => {
+    const matchesSearch = searchTerm === "" || 
+      request.patient?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      request.patient?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      request.requested_by_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSearch && request.status === "archived";
   });
 
   return (
@@ -310,11 +350,25 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="requests" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-muted/50">
             <TabsTrigger value="requests" className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
               Supply Requests
+              {filteredRequests.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {filteredRequests.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="archived" className="flex items-center gap-2">
+              <Archive className="h-4 w-4" />
+              Archived
+              {archivedRequests.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {archivedRequests.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="catalog" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -444,11 +498,6 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
                               onApprovalSuccess={() => handleOpenDeliveryDialog(request.patient_id, items, request.id)}
                             />
                           )}
-                          {request.status === "approved" && request.deliveries && request.deliveries.length > 0 && (
-                            <Badge variant="outline" className="bg-[#B8A9D4]/20 text-[#B8A9D4] border-0">
-                              Delivery Created
-                            </Badge>
-                          )}
                           {request.status === "approved" && (!request.deliveries || request.deliveries.length === 0) && (
                             <Button
                               size="sm"
@@ -468,6 +517,96 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
               );
             })
           )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="archived" className="space-y-6">
+            {/* Search for archived */}
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search archived requests..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Archived Requests List */}
+            <div className="space-y-4">
+              {archivedRequests.length === 0 ? (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-12 text-center">
+                    <Archive className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-medium text-muted-foreground">No archived requests</h3>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Archived supply requests will appear here
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                archivedRequests.map((request) => {
+                  const items = request.items as Record<string, number>;
+                  return (
+                    <Card key={request.id} className="border-0 shadow-sm opacity-75">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col gap-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="font-serif font-semibold text-lg text-[#2D2D2D]">
+                                {request.patient
+                                  ? `${request.patient.first_name} ${request.patient.last_name}`
+                                  : "Unknown Patient"}
+                              </h3>
+                              <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-0 mt-1">
+                                Archived
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Package className="h-4 w-4" />
+                            <span>{Object.keys(items).length} items requested:</span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(items).map(([item, quantity]) => (
+                              <Badge
+                                key={item}
+                                variant="secondary"
+                                className="bg-muted/50 text-muted-foreground"
+                              >
+                                {item.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} × {quantity}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {request.notes && (
+                            <p className="text-sm text-muted-foreground italic">
+                              Note: {request.notes}
+                            </p>
+                          )}
+
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="h-3.5 w-3.5" />
+                              {mounted ? formatDate(request.created_at) : "Loading..."}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5" />
+                              {request.requester?.name || "Family Member"}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </TabsContent>
 
