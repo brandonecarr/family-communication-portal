@@ -40,10 +40,6 @@ export function SupplyRequestActions({
     setIsLoading(true);
     try {
       await approveSupplyRequest(requestId, userName);
-      toast({
-        title: "Request Approved",
-        description: "The supply request has been approved and a delivery has been created.",
-      });
       setShowApproveDialog(false);
       
       // Call the callback to open delivery dialog

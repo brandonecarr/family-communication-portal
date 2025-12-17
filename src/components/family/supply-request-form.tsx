@@ -262,8 +262,8 @@ export default function SupplyRequestForm() {
       setSelectedItems({});
       setNotes("");
       
-      // Refresh the page to show the new request card
-      router.refresh();
+      // Redirect to deliveries page
+      router.push("/family/deliveries");
     } catch (error) {
       console.error("Error submitting request:", error);
       toast({

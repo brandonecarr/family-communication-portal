@@ -198,10 +198,19 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
 
   const handleOpenDeliveryDialog = (patientId: string, requestedItems: Record<string, number>, supplyRequestId?: string) => {
     // Convert requested items to array with quantities
-    const itemsWithQuantities = Object.entries(requestedItems).map(([key, quantity]) => ({
-      name: key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-      quantity: quantity
-    }));
+    // Match the item keys to catalog item names
+    const itemsWithQuantities = Object.entries(requestedItems).map(([key, quantity]) => {
+      // Try to find matching catalog item by ID or formatted name
+      const matchingItem = catalogItems.find(item => 
+        item.id === key || 
+        item.name.toLowerCase().replace(/\s+/g, '_') === key.toLowerCase()
+      );
+      
+      return {
+        name: matchingItem?.name || key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+        quantity: quantity
+      };
+    });
     
     setFormData({
       patient_id: patientId,
@@ -576,7 +585,21 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowDeliveryDialog(false)}
+              onClick={() => {
+                setShowDeliveryDialog(false);
+                // Reset form when canceling
+                setSelectedItems([]);
+                setFormData({
+                  patient_id: "",
+                  carrier: "",
+                  tracking_number: "",
+                  tracking_url: "",
+                  status: "ordered",
+                  estimated_delivery: "",
+                  notes: "",
+                  supply_request_id: undefined,
+                });
+              }}
               disabled={isLoading}
             >
               Cancel

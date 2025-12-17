@@ -172,15 +172,21 @@ export default function SupplyRequestTracker() {
                     <span className="font-medium">{totalQuantity} items requested:</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {itemEntries.map(([itemName, quantity]) => (
-                      <Badge 
-                        key={itemName}
-                        variant="secondary" 
-                        className="bg-[#D4876F]/20 text-[#D4876F] border-0 px-3 py-1"
-                      >
-                        {itemName} × {quantity}
-                      </Badge>
-                    ))}
+                    {itemEntries.map(([itemName, quantity]) => {
+                      const formattedName = itemName
+                        .split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                      return (
+                        <Badge 
+                          key={itemName}
+                          variant="secondary" 
+                          className="bg-[#D4876F]/20 text-[#D4876F] border-0 px-3 py-1"
+                        >
+                          {formattedName} × {quantity}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 </div>
               )}
