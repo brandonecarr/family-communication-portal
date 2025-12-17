@@ -121,6 +121,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
     status: "ordered",
     estimated_delivery: "",
     notes: "",
+    supply_request_id: undefined as string | undefined,
   });
 
   const toggleItem = (itemName: string) => {
@@ -137,7 +138,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
     setSelectedItems(prev => prev.filter(i => i.name !== itemName));
   };
 
-  const handleOpenDeliveryDialog = (patientId: string, requestedItems: Record<string, number>) => {
+  const handleOpenDeliveryDialog = (patientId: string, requestedItems: Record<string, number>, supplyRequestId?: string) => {
     // Convert requested items to array with quantities
     const itemsWithQuantities = Object.entries(requestedItems).map(([key, quantity]) => ({
       name: key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
@@ -152,6 +153,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
       status: "ordered",
       estimated_delivery: "",
       notes: "",
+      supply_request_id: supplyRequestId,
     });
     setSelectedItems(itemsWithQuantities);
     setShowDeliveryDialog(true);
@@ -190,6 +192,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
         status: "ordered",
         estimated_delivery: "",
         notes: "",
+        supply_request_id: undefined,
       });
       
       toast({
@@ -345,7 +348,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                               patientName={request.patient ? `${request.patient.first_name} ${request.patient.last_name}` : "Unknown Patient"}
                               items={items}
                               userName={userName}
-                              onApprovalSuccess={() => handleOpenDeliveryDialog(request.patient_id, items)}
+                              onApprovalSuccess={() => handleOpenDeliveryDialog(request.patient_id, items, request.id)}
                             />
                           )}
                           {request.status === "approved" && (

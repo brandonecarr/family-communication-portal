@@ -308,9 +308,11 @@ export type Database = {
         Row: {
           carrier: string | null
           created_at: string | null
+          delivered_at: string | null
           estimated_delivery: string | null
           estimated_delivery_date: string | null
           id: string
+          is_archived: boolean | null
           item_name: string
           last_update: string | null
           notes: string | null
@@ -324,9 +326,11 @@ export type Database = {
         Insert: {
           carrier?: string | null
           created_at?: string | null
+          delivered_at?: string | null
           estimated_delivery?: string | null
           estimated_delivery_date?: string | null
           id?: string
+          is_archived?: boolean | null
           item_name: string
           last_update?: string | null
           notes?: string | null
@@ -340,9 +344,11 @@ export type Database = {
         Update: {
           carrier?: string | null
           created_at?: string | null
+          delivered_at?: string | null
           estimated_delivery?: string | null
           estimated_delivery_date?: string | null
           id?: string
+          is_archived?: boolean | null
           item_name?: string
           last_update?: string | null
           notes?: string | null

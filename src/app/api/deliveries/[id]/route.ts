@@ -70,6 +70,10 @@ export async function PATCH(
     // Add last_update timestamp when status changes
     if (body.status !== undefined && body.status !== existingDelivery.status) {
       updateData.last_update = new Date().toISOString();
+      // Set delivered_at when status changes to delivered
+      if (body.status === "delivered") {
+        updateData.delivered_at = new Date().toISOString();
+      }
     }
 
     const { data: delivery, error } = await supabase

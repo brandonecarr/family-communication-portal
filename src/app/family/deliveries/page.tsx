@@ -1,4 +1,14 @@
-import DeliveryTracker from "@/components/family/delivery-tracker";
+import dynamic from "next/dynamic";
+
+const DeliveryTracker = dynamic(
+  () => import("@/components/family/delivery-tracker"),
+  { ssr: false }
+);
+
+const SupplyRequestTracker = dynamic(
+  () => import("@/components/family/supply-request-tracker"),
+  { ssr: false }
+);
 
 export default function DeliveriesPage() {
   return (
@@ -9,6 +19,7 @@ export default function DeliveriesPage() {
           Track your medication and supply deliveries
         </p>
       </div>
+      <SupplyRequestTracker />
       <DeliveryTracker />
     </div>
   );

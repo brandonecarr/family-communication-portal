@@ -57,6 +57,7 @@ interface Delivery {
   last_update?: string | null;
   notes?: string | null;
   created_at: string;
+  supply_request_id?: string | null;
   patient?: {
     first_name: string;
     last_name: string;
@@ -116,6 +117,7 @@ export function DeliveryManagementClient({
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [trackingLink, setTrackingLink] = useState("");
   const { toast } = useToast();
 
   // Form state
@@ -209,15 +211,18 @@ export function DeliveryManagementClient({
     }
   };
 
-  const handleUpdateStatus = async (newStatus: string) => {
-    if (!selectedDelivery) return;
+  const handleUpdateStatus = async () => {
+    if (!selectedDelivery || !trackingLink) return;
 
     setIsLoading(true);
     try {
       const response = await fetch(`/api/deliveries/${selectedDelivery.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ 
+          status: "shipped",
+          tracking_url: trackingLink 
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to update status");
@@ -230,9 +235,10 @@ export function DeliveryManagementClient({
       );
       setShowStatusDialog(false);
       setSelectedDelivery(null);
+      setTrackingLink("");
       toast({
-        title: "Status Updated",
-        description: "The delivery status has been updated.",
+        title: "Shipment Confirmed",
+        description: "The delivery has been marked as shipped.",
       });
     } catch (error) {
       toast({
@@ -424,7 +430,7 @@ export function DeliveryManagementClient({
                               : "Unknown"}
                           </p>
                         </div>
-                        <Badge variant="outline" className={config}>
+                        <Badge variant="outline" className={`${config} h-9 px-4 py-2 text-sm rounded-full`}>
                           {delivery.status?.replace("_", " ").toUpperCase() ||
                             "UNKNOWN"}
                         </Badge>
@@ -433,7 +439,7 @@ export function DeliveryManagementClient({
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Package className="h-4 w-4" />
-                          <span>
+                          <span className="text-sm">
                             {delivery.carrier && delivery.tracking_number
                               ? `${delivery.carrier} • ${delivery.tracking_number}`
                               : delivery.carrier || "Preparing for shipment"}
@@ -442,7 +448,7 @@ export function DeliveryManagementClient({
                         {delivery.estimated_delivery && (
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Clock className="h-4 w-4" />
-                            <span>ETA: {delivery.estimated_delivery}</span>
+                            <span className="text-sm">ETA: {delivery.estimated_delivery}</span>
                           </div>
                         )}
                       </div>
@@ -476,14 +482,7 @@ export function DeliveryManagementClient({
                     >
                       Update Status
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => openEditDialog(delivery)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+
                   </div>
                 </div>
               </CardContent>
@@ -652,48 +651,43 @@ export function DeliveryManagementClient({
                     <Badge
                       key={item}
                       variant="secondary"
-                      className="flex items-center gap-1 bg-[#7A9B8E]/20 text-[#7A9B8E]"
+                      className="bg-[#7A9B8E]/20 text-[#7A9B8E]"
                     >
                       {item}
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item)}
-                        className="ml-1 hover:text-red-500"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
                     </Badge>
                   ))}
                 </div>
               )}
-              <ScrollArea className="h-48 rounded-md border p-3">
-                <div className="space-y-3">
-                  {["General", "Personal Care", "Medical Supplies", "Comfort Items"].map((category) => (
-                    <div key={category}>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
-                      <div className="space-y-2">
-                        {allSelectableItems
-                          .filter((item) => item.category === category)
-                          .map((item) => (
-                            <div key={item.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`edit-${item.id}`}
-                                checked={selectedItems.includes(item.name)}
-                                onCheckedChange={() => toggleItem(item.name)}
-                              />
-                              <label
-                                htmlFor={`edit-${item.id}`}
-                                className="text-sm cursor-pointer"
-                              >
-                                {item.name}
-                              </label>
-                            </div>
-                          ))}
+              {!selectedDelivery?.supply_request_id && (
+                <ScrollArea className="h-48 rounded-md border p-3">
+                  <div className="space-y-3">
+                    {["General", "Personal Care", "Medical Supplies", "Comfort Items"].map((category) => (
+                      <div key={category}>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
+                        <div className="space-y-2">
+                          {allSelectableItems
+                            .filter((item) => item.category === category)
+                            .map((item) => (
+                              <div key={item.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`edit-${item.id}`}
+                                  checked={selectedItems.includes(item.name)}
+                                  onCheckedChange={() => toggleItem(item.name)}
+                                />
+                                <label
+                                  htmlFor={`edit-${item.id}`}
+                                  className="text-sm cursor-pointer"
+                                >
+                                  {item.name}
+                                </label>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -808,11 +802,11 @@ export function DeliveryManagementClient({
           <DialogHeader>
             <DialogTitle>Update Delivery Status</DialogTitle>
             <DialogDescription>
-              Change the status of this delivery
+              Enter the tracking link to confirm shipment
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <div className="space-y-2">
+            <div className="space-y-4">
               {selectedDelivery && (
                 <div className="mb-4 p-3 bg-muted/30 rounded-lg">
                   <p className="text-sm font-medium">
@@ -824,25 +818,30 @@ export function DeliveryManagementClient({
                   </p>
                 </div>
               )}
-              <Label>New Status</Label>
-              <Select
-                defaultValue={selectedDelivery?.status}
-                onValueChange={(value) => handleUpdateStatus(value)}
+              <div className="space-y-2">
+                <Label htmlFor="tracking-link">Tracking Link</Label>
+                <Input
+                  id="tracking-link"
+                  type="url"
+                  placeholder="https://..."
+                  value={trackingLink}
+                  onChange={(e) => setTrackingLink(e.target.value)}
+                />
+              </div>
+              <Button
+                onClick={handleUpdateStatus}
+                disabled={!trackingLink || isLoading}
+                className="w-full"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select new status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ordered">Ordered</SelectItem>
-                  <SelectItem value="shipped">Shipped</SelectItem>
-                  <SelectItem value="in_transit">In Transit</SelectItem>
-                  <SelectItem value="out_for_delivery">
-                    Out for Delivery
-                  </SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
-                  <SelectItem value="exception">Exception</SelectItem>
-                </SelectContent>
-              </Select>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Confirming...
+                  </>
+                ) : (
+                  "Confirm Shipment"
+                )}
+              </Button>
             </div>
           </div>
         </DialogContent>

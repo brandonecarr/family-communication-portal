@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
       status,
       estimated_delivery,
       notes,
+      supply_request_id,
     } = body;
 
     // Verify the patient belongs to the user's agency
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
         status: status || "ordered",
         estimated_delivery: estimated_delivery || null,
         notes: notes || null,
+        supply_request_id: supply_request_id || null,
       })
       .select(
         `

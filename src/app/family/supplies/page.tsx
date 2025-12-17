@@ -1,5 +1,9 @@
-import SupplyRequestForm from "@/components/family/supply-request-form";
-import SupplyRequestCards from "@/components/family/supply-request-cards";
+import dynamic from "next/dynamic";
+
+const SupplyRequestForm = dynamic(
+  () => import("@/components/family/supply-request-form"),
+  { ssr: false }
+);
 
 export default function SuppliesPage() {
   return (
@@ -10,7 +14,6 @@ export default function SuppliesPage() {
           Let us know what supplies you need for your loved one's care
         </p>
       </div>
-      <SupplyRequestCards />
       <SupplyRequestForm />
     </div>
   );

@@ -124,7 +124,6 @@ export default function SupplyRequestCards() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Your Requests</h2>
       {requests.map((request) => {
         const config = statusConfig[request.status as keyof typeof statusConfig] || statusConfig.pending;
         const StatusIcon = config.icon;

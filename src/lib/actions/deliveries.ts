@@ -86,9 +86,11 @@ export async function createDelivery(deliveryData: {
   item_name: string;
   carrier?: string;
   tracking_number?: string;
+  tracking_url?: string;
   status?: string;
   estimated_delivery?: string;
   notes?: string;
+  supply_request_id?: string;
 }) {
   const supabase = await createClient();
   
