@@ -166,12 +166,27 @@ export function DeliveryManagementClient({
       ]);
 
       if (categoriesRes.data && categoriesRes.data.length > 0 && itemsRes.data) {
-        // Format items with category names
-        const formattedItems: CatalogItem[] = itemsRes.data.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          category: item.supply_categories?.name || "General",
-        }));
+        // Format items with category names and sizes
+        const formattedItems: CatalogItem[] = itemsRes.data.flatMap((item: any) => {
+          const baseName = item.name;
+          const category = item.supply_categories?.name || "General";
+          
+          // If item has sizes, create separate entries for each size
+          if (item.requires_size && item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
+            return item.sizes.map((size: string) => ({
+              id: `${item.id}_${size.toLowerCase()}`,
+              name: `${baseName} (${size})`,
+              category,
+            }));
+          }
+          
+          // Otherwise, just return the item as-is
+          return [{
+            id: item.id,
+            name: baseName,
+            category,
+          }];
+        });
 
         // Add general items at the beginning
         const generalItems: CatalogItem[] = [

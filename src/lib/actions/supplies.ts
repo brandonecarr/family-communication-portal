@@ -317,3 +317,175 @@ export async function rejectSupplyRequest(requestId: string, rejectedByName: str
   
   return data;
 }
+
+// Inventory Management Functions
+
+export async function getInventoryItems(agencyId: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("supply_catalog_items")
+    .select(`
+      *,
+      supply_categories (name)
+    `)
+    .eq("agency_id", agencyId)
+    .eq("track_inventory", true)
+    .eq("is_active", true)
+    .order("name");
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function deductInventory(
+  agencyId: string,
+  items: Array<{ itemName: string; quantity: number; size?: string }>,
+  supplyRequestId: string,
+  performedByName: string
+) {
+  const supabase = await createClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  for (const item of items) {
+    // Find the catalog item by name
+    const { data: catalogItem, error: findError } = await supabase
+      .from("supply_catalog_items")
+      .select("*")
+      .eq("agency_id", agencyId)
+      .eq("track_inventory", true)
+      .ilike("name", `%${item.itemName.replace(/_/g, " ")}%`)
+      .single();
+    
+    if (findError || !catalogItem) {
+      console.warn(`Catalog item not found for: ${item.itemName}`);
+      continue;
+    }
+    
+    let previousQuantity: number;
+    let newQuantity: number;
+    
+    if (catalogItem.requires_size && item.size) {
+      // Handle size-based inventory
+      const sizeQuantities = catalogItem.size_quantities || {};
+      previousQuantity = sizeQuantities[item.size] || 0;
+      newQuantity = Math.max(0, previousQuantity - item.quantity);
+      sizeQuantities[item.size] = newQuantity;
+      
+      const { error: updateError } = await supabase
+        .from("supply_catalog_items")
+        .update({ size_quantities: sizeQuantities })
+        .eq("id", catalogItem.id);
+      
+      if (updateError) {
+        console.error(`Error updating inventory for ${item.itemName}:`, updateError);
+        continue;
+      }
+    } else {
+      // Handle non-size inventory
+      previousQuantity = catalogItem.quantity_on_hand || 0;
+      newQuantity = Math.max(0, previousQuantity - item.quantity);
+      
+      const { error: updateError } = await supabase
+        .from("supply_catalog_items")
+        .update({ quantity_on_hand: newQuantity })
+        .eq("id", catalogItem.id);
+      
+      if (updateError) {
+        console.error(`Error updating inventory for ${item.itemName}:`, updateError);
+        continue;
+      }
+    }
+    
+    // Record the transaction
+    await supabase
+      .from("inventory_transactions")
+      .insert({
+        agency_id: agencyId,
+        catalog_item_id: catalogItem.id,
+        supply_request_id: supplyRequestId,
+        transaction_type: "deduct",
+        quantity: -item.quantity,
+        previous_quantity: previousQuantity,
+        new_quantity: newQuantity,
+        size: item.size || null,
+        notes: `Deducted for supply request`,
+        performed_by: user?.id,
+        performed_by_name: performedByName,
+      });
+  }
+  
+  revalidatePath("/admin/supplies");
+  return { success: true };
+}
+
+export async function addInventory(
+  agencyId: string,
+  catalogItemId: string,
+  quantity: number,
+  size: string | null,
+  performedByName: string,
+  notes?: string
+) {
+  const supabase = await createClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  // Get current item
+  const { data: catalogItem, error: findError } = await supabase
+    .from("supply_catalog_items")
+    .select("*")
+    .eq("id", catalogItemId)
+    .single();
+  
+  if (findError || !catalogItem) {
+    throw new Error("Catalog item not found");
+  }
+  
+  let previousQuantity: number;
+  let newQuantity: number;
+  
+  if (catalogItem.requires_size && size) {
+    const sizeQuantities = catalogItem.size_quantities || {};
+    previousQuantity = sizeQuantities[size] || 0;
+    newQuantity = previousQuantity + quantity;
+    sizeQuantities[size] = newQuantity;
+    
+    const { error: updateError } = await supabase
+      .from("supply_catalog_items")
+      .update({ size_quantities: sizeQuantities })
+      .eq("id", catalogItemId);
+    
+    if (updateError) throw updateError;
+  } else {
+    previousQuantity = catalogItem.quantity_on_hand || 0;
+    newQuantity = previousQuantity + quantity;
+    
+    const { error: updateError } = await supabase
+      .from("supply_catalog_items")
+      .update({ quantity_on_hand: newQuantity })
+      .eq("id", catalogItemId);
+    
+    if (updateError) throw updateError;
+  }
+  
+  // Record the transaction
+  await supabase
+    .from("inventory_transactions")
+    .insert({
+      agency_id: agencyId,
+      catalog_item_id: catalogItemId,
+      transaction_type: "add",
+      quantity: quantity,
+      previous_quantity: previousQuantity,
+      new_quantity: newQuantity,
+      size: size,
+      notes: notes || "Inventory added",
+      performed_by: user?.id,
+      performed_by_name: performedByName,
+    });
+  
+  revalidatePath("/admin/supplies");
+  return { success: true, newQuantity };
+}

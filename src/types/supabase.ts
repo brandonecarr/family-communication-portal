@@ -597,6 +597,76 @@ export type Database = {
           },
         ]
       }
+      inventory_transactions: {
+        Row: {
+          agency_id: string
+          catalog_item_id: string
+          created_at: string | null
+          id: string
+          new_quantity: number
+          notes: string | null
+          performed_by: string | null
+          performed_by_name: string | null
+          previous_quantity: number
+          quantity: number
+          size: string | null
+          supply_request_id: string | null
+          transaction_type: string
+        }
+        Insert: {
+          agency_id: string
+          catalog_item_id: string
+          created_at?: string | null
+          id?: string
+          new_quantity: number
+          notes?: string | null
+          performed_by?: string | null
+          performed_by_name?: string | null
+          previous_quantity: number
+          quantity: number
+          size?: string | null
+          supply_request_id?: string | null
+          transaction_type: string
+        }
+        Update: {
+          agency_id?: string
+          catalog_item_id?: string
+          created_at?: string | null
+          id?: string
+          new_quantity?: number
+          notes?: string | null
+          performed_by?: string | null
+          performed_by_name?: string | null
+          previous_quantity?: number
+          quantity?: number
+          size?: string | null
+          supply_request_id?: string | null
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transactions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "supply_catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_supply_request_id_fkey"
+            columns: ["supply_request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           created_at: string | null
@@ -967,9 +1037,13 @@ export type Database = {
           display_order: number | null
           id: string
           is_active: boolean | null
+          low_stock_threshold: number | null
           name: string
+          quantity_on_hand: number | null
           requires_size: boolean | null
+          size_quantities: Json | null
           sizes: string[] | null
+          track_inventory: boolean | null
           unit: string | null
           updated_at: string | null
         }
@@ -981,9 +1055,13 @@ export type Database = {
           display_order?: number | null
           id?: string
           is_active?: boolean | null
+          low_stock_threshold?: number | null
           name: string
+          quantity_on_hand?: number | null
           requires_size?: boolean | null
+          size_quantities?: Json | null
           sizes?: string[] | null
+          track_inventory?: boolean | null
           unit?: string | null
           updated_at?: string | null
         }
@@ -995,9 +1073,13 @@ export type Database = {
           display_order?: number | null
           id?: string
           is_active?: boolean | null
+          low_stock_threshold?: number | null
           name?: string
+          quantity_on_hand?: number | null
           requires_size?: boolean | null
+          size_quantities?: Json | null
           sizes?: string[] | null
+          track_inventory?: boolean | null
           unit?: string | null
           updated_at?: string | null
         }

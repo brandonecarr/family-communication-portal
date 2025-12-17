@@ -69,6 +69,10 @@ interface SupplyCatalogItem {
   display_order: number;
   is_active: boolean;
   created_at: string;
+  track_inventory: boolean;
+  quantity_on_hand: number;
+  low_stock_threshold: number;
+  size_quantities: Record<string, number> | null;
 }
 
 interface SupplyCatalogManagementProps {
@@ -96,7 +100,11 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
     unit: "each", 
     category_id: "",
     requires_size: false,
-    sizes: "" // Comma-separated string for input
+    sizes: "", // Comma-separated string for input
+    track_inventory: false,
+    quantity_on_hand: 0,
+    low_stock_threshold: 5,
+    size_quantities: {} as Record<string, number>,
   });
   const [savingItem, setSavingItem] = useState(false);
   
@@ -104,6 +112,13 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "category" | "item"; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  
+  // Add stock dialog state
+  const [addStockDialogOpen, setAddStockDialogOpen] = useState(false);
+  const [addStockItem, setAddStockItem] = useState<SupplyCatalogItem | null>(null);
+  const [addStockQuantity, setAddStockQuantity] = useState(0);
+  const [addStockSize, setAddStockSize] = useState<string>("");
+  const [addingStock, setAddingStock] = useState(false);
   
   const { toast } = useToast();
   const supabase = createClient();
@@ -261,6 +276,10 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
         category_id: item.category_id,
         requires_size: item.requires_size || false,
         sizes: item.sizes?.join(", ") || "",
+        track_inventory: item.track_inventory || false,
+        quantity_on_hand: item.quantity_on_hand || 0,
+        low_stock_threshold: item.low_stock_threshold || 5,
+        size_quantities: item.size_quantities || {},
       });
     } else {
       setEditingItem(null);
@@ -271,6 +290,10 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
         category_id: categoryId || (categories[0]?.id || ""),
         requires_size: false,
         sizes: "",
+        track_inventory: false,
+        quantity_on_hand: 0,
+        low_stock_threshold: 5,
+        size_quantities: {},
       });
     }
     setItemDialogOpen(true);
@@ -302,6 +325,15 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
         ? itemForm.sizes.split(",").map(s => s.trim()).filter(s => s)
         : null;
 
+      // Build size_quantities object if tracking inventory with sizes
+      let sizeQuantities: Record<string, number> | null = null;
+      if (itemForm.track_inventory && itemForm.requires_size && sizesArray) {
+        sizeQuantities = {};
+        sizesArray.forEach(size => {
+          sizeQuantities![size] = itemForm.size_quantities[size] || 0;
+        });
+      }
+
       if (editingItem) {
         const { error } = await supabase
           .from("supply_catalog_items")
@@ -312,6 +344,10 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
             category_id: itemForm.category_id,
             requires_size: itemForm.requires_size,
             sizes: sizesArray,
+            track_inventory: itemForm.track_inventory,
+            quantity_on_hand: itemForm.track_inventory && !itemForm.requires_size ? itemForm.quantity_on_hand : 0,
+            low_stock_threshold: itemForm.low_stock_threshold,
+            size_quantities: sizeQuantities,
           })
           .eq("id", editingItem.id);
 
@@ -332,6 +368,10 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
             requires_size: itemForm.requires_size,
             sizes: sizesArray,
             display_order: maxOrder + 1,
+            track_inventory: itemForm.track_inventory,
+            quantity_on_hand: itemForm.track_inventory && !itemForm.requires_size ? itemForm.quantity_on_hand : 0,
+            low_stock_threshold: itemForm.low_stock_threshold,
+            size_quantities: sizeQuantities,
           });
 
         if (error) throw error;
@@ -572,6 +612,25 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
                                       Sizes: {item.sizes?.join(", ") || "Not set"}
                                     </Badge>
                                   )}
+                                  {item.track_inventory && (
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`text-xs ${
+                                        item.requires_size 
+                                          ? Object.values(item.size_quantities || {}).some(q => q <= item.low_stock_threshold)
+                                            ? "bg-[#D4876F]/10 text-[#D4876F] border-[#D4876F]/30"
+                                            : "bg-[#7A9B8E]/10 text-[#7A9B8E] border-[#7A9B8E]/30"
+                                          : item.quantity_on_hand <= item.low_stock_threshold
+                                            ? "bg-[#D4876F]/10 text-[#D4876F] border-[#D4876F]/30"
+                                            : "bg-[#7A9B8E]/10 text-[#7A9B8E] border-[#7A9B8E]/30"
+                                      }`}
+                                    >
+                                      {item.requires_size 
+                                        ? `Stock: ${Object.entries(item.size_quantities || {}).map(([s, q]) => `${s}:${q}`).join(", ") || "0"}`
+                                        : `In Stock: ${item.quantity_on_hand}`
+                                      }
+                                    </Badge>
+                                  )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                   Unit: {item.unit}
@@ -772,6 +831,80 @@ export function SupplyCatalogManagement({ agencyId }: SupplyCatalogManagementPro
                 </p>
               </div>
             )}
+            
+            {/* Inventory Tracking Section */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center space-x-2 mb-4">
+                <Switch
+                  id="track-inventory"
+                  checked={itemForm.track_inventory}
+                  onCheckedChange={(checked) => setItemForm({ ...itemForm, track_inventory: checked })}
+                />
+                <Label htmlFor="track-inventory" className="cursor-pointer font-medium">
+                  Track inventory for this item
+                </Label>
+              </div>
+              
+              {itemForm.track_inventory && (
+                <div className="space-y-4 pl-4 border-l-2 border-[#7A9B8E]/30">
+                  <div className="space-y-2">
+                    <Label htmlFor="low-stock-threshold">Low Stock Alert Threshold</Label>
+                    <Input
+                      id="low-stock-threshold"
+                      type="number"
+                      min="0"
+                      value={itemForm.low_stock_threshold}
+                      onChange={(e) => setItemForm({ ...itemForm, low_stock_threshold: parseInt(e.target.value) || 0 })}
+                      className="w-32"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Alert when quantity falls below this number
+                    </p>
+                  </div>
+                  
+                  {!itemForm.requires_size ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity-on-hand">Quantity On Hand</Label>
+                      <Input
+                        id="quantity-on-hand"
+                        type="number"
+                        min="0"
+                        value={itemForm.quantity_on_hand}
+                        onChange={(e) => setItemForm({ ...itemForm, quantity_on_hand: parseInt(e.target.value) || 0 })}
+                        className="w-32"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <Label>Quantity Per Size</Label>
+                      {itemForm.sizes.split(",").map(s => s.trim()).filter(s => s).map((size) => (
+                        <div key={size} className="flex items-center gap-3">
+                          <span className="text-sm font-medium w-24">{size}:</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={itemForm.size_quantities[size] || 0}
+                            onChange={(e) => setItemForm({ 
+                              ...itemForm, 
+                              size_quantities: { 
+                                ...itemForm.size_quantities, 
+                                [size]: parseInt(e.target.value) || 0 
+                              } 
+                            })}
+                            className="w-24"
+                          />
+                        </div>
+                      ))}
+                      {!itemForm.sizes.trim() && (
+                        <p className="text-xs text-muted-foreground italic">
+                          Add sizes above to set quantities per size
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setItemDialogOpen(false)}>

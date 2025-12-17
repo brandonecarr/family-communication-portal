@@ -11,8 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2, Package } from "lucide-react";
-import { approveSupplyRequest, rejectSupplyRequest } from "@/lib/actions/supplies";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { CheckCircle2, XCircle, Loader2, Package, Warehouse, Truck } from "lucide-react";
+import { approveSupplyRequest, rejectSupplyRequest, deductInventory } from "@/lib/actions/supplies";
 import { useToast } from "@/components/ui/use-toast";
 
 interface SupplyRequestActionsProps {
@@ -20,6 +22,7 @@ interface SupplyRequestActionsProps {
   patientName: string;
   items: Record<string, number>;
   userName: string;
+  agencyId: string;
   onApprovalSuccess?: () => void;
 }
 
@@ -28,18 +31,44 @@ export function SupplyRequestActions({
   patientName,
   items,
   userName,
+  agencyId,
   onApprovalSuccess,
 }: SupplyRequestActionsProps) {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [fulfillmentSource, setFulfillmentSource] = useState<"inventory" | "external">("external");
   const { toast } = useToast();
 
   const handleApprove = async () => {
     setIsLoading(true);
     try {
       await approveSupplyRequest(requestId, userName);
+      
+      // If fulfilling from inventory, deduct the items
+      if (fulfillmentSource === "inventory") {
+        const itemsToDeduct = Object.entries(items).map(([name, quantity]) => {
+          // Parse size from item name if present (e.g., "Gloves (Medium)" -> size: "Medium")
+          const sizeMatch = name.match(/\(([^)]+)\)$/);
+          const size = sizeMatch ? sizeMatch[1] : undefined;
+          const itemName = sizeMatch ? name.replace(/\s*\([^)]+\)$/, "") : name;
+          
+          return {
+            itemName,
+            quantity,
+            size,
+          };
+        });
+        
+        await deductInventory(agencyId, itemsToDeduct, requestId, userName);
+        
+        toast({
+          title: "Inventory Updated",
+          description: "Items have been deducted from your inventory.",
+        });
+      }
+      
       setShowApproveDialog(false);
       
       // Call the callback to open delivery dialog
@@ -163,7 +192,7 @@ export function SupplyRequestActions({
 
       {/* Approve Confirmation Dialog */}
       <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Confirm Approval</DialogTitle>
             <DialogDescription>
@@ -193,6 +222,52 @@ export function SupplyRequestActions({
                 );
               })}
             </div>
+            
+            {/* Fulfillment Source Selection */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-sm font-semibold mb-3 block">
+                Where are these items coming from?
+              </Label>
+              <RadioGroup
+                value={fulfillmentSource}
+                onValueChange={(value) => setFulfillmentSource(value as "inventory" | "external")}
+                className="space-y-3"
+              >
+                <div className={`flex items-start space-x-3 p-3 rounded-lg border-2 transition-colors cursor-pointer ${
+                  fulfillmentSource === "inventory" 
+                    ? "border-[#7A9B8E] bg-[#7A9B8E]/5" 
+                    : "border-muted hover:border-muted-foreground/30"
+                }`}>
+                  <RadioGroupItem value="inventory" id="inventory" className="mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="inventory" className="flex items-center gap-2 cursor-pointer font-medium">
+                      <Warehouse className="h-4 w-4 text-[#7A9B8E]" />
+                      From Inventory
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Deduct these items from your on-hand inventory
+                    </p>
+                  </div>
+                </div>
+                <div className={`flex items-start space-x-3 p-3 rounded-lg border-2 transition-colors cursor-pointer ${
+                  fulfillmentSource === "external" 
+                    ? "border-[#7A9B8E] bg-[#7A9B8E]/5" 
+                    : "border-muted hover:border-muted-foreground/30"
+                }`}>
+                  <RadioGroupItem value="external" id="external" className="mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="external" className="flex items-center gap-2 cursor-pointer font-medium">
+                      <Truck className="h-4 w-4 text-[#B8A9D4]" />
+                      Order Externally
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Items will be ordered from an external supplier (no inventory change)
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+            
             <p className="text-sm text-muted-foreground leading-relaxed pt-2">
               A delivery will be automatically created for these items once approved.
             </p>

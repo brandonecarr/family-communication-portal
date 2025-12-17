@@ -574,6 +574,7 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
                               patientName={request.patient ? `${request.patient.first_name} ${request.patient.last_name}` : "Unknown Patient"}
                               items={items}
                               userName={userName}
+                              agencyId={agencyId}
                               onApprovalSuccess={() => handleOpenDeliveryDialog(request.patient_id, items, request.id)}
                             />
                           )}
