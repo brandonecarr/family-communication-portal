@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
+import { registerTrackingNumber } from "@/lib/actions/tracking";
 
 export async function POST(request: NextRequest) {
   try {
@@ -167,6 +168,45 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create delivery", details: error.message, code: error.code },
         { status: 500 }
       );
+    }
+
+    // Register tracking number with 17track if tracking info was provided
+    if (delivery && (tracking_number || tracking_url)) {
+      try {
+        // Get family member email for notifications
+        let familyEmail: string | undefined;
+        const { data: familyMembers } = await supabase
+          .from("family_members")
+          .select("email")
+          .eq("patient_id", patient_id)
+          .not("email", "is", null)
+          .limit(1);
+        
+        if (familyMembers && familyMembers.length > 0 && familyMembers[0].email) {
+          familyEmail = familyMembers[0].email;
+        }
+        
+        console.log("Registering tracking with 17track for new delivery:", { 
+          trackingNumber: tracking_number, 
+          carrier,
+          deliveryId: delivery.id,
+          familyEmail,
+        });
+        
+        const result = await registerTrackingNumber({
+          trackingNumber: tracking_number || "",
+          trackingUrl: tracking_url || "",
+          deliveryId: delivery.id,
+          carrierName: carrier || undefined,
+          email: familyEmail,
+          tag: delivery.id,
+          note: item_name || undefined,
+        });
+        console.log("17track registration result:", result);
+      } catch (trackingError) {
+        // Log but don't fail the request if tracking registration fails
+        console.error("Failed to register tracking with 17track:", trackingError);
+      }
     }
 
     return NextResponse.json(delivery, { status: 201 });

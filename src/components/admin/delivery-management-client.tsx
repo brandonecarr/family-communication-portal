@@ -87,8 +87,39 @@ const carrierOptions = [
   "USPS",
   "DHL",
   "Amazon Logistics",
+  "OnTrac",
+  "LaserShip",
   "Other",
 ];
+
+// Detect carrier from tracking number format
+function detectCarrierFromTrackingNumber(trackingNumber: string): string | null {
+  if (!trackingNumber) return null;
+  
+  const num = trackingNumber.toUpperCase().trim();
+  
+  // UPS: starts with 1Z followed by alphanumeric
+  if (/^1Z[A-Z0-9]{16,18}$/i.test(num)) return "UPS";
+  
+  // FedEx: 12-22 digits, or starts with specific patterns
+  if (/^\d{12}$/.test(num) || /^\d{15}$/.test(num) || /^\d{20}$/.test(num) || /^\d{22}$/.test(num)) return "FedEx";
+  if (/^[0-9]{12,22}$/.test(num)) return "FedEx";
+  
+  // USPS: 20-22 digits, or starts with 9 followed by 15-21 digits
+  if (/^9[0-9]{15,21}$/.test(num)) return "USPS";
+  if (/^[0-9]{20,22}$/.test(num)) return "USPS";
+  if (/^(94|93|92|91)[0-9]{18,20}$/.test(num)) return "USPS";
+  
+  // DHL: 10-11 digits or starts with JD/JJD
+  if (/^[0-9]{10,11}$/.test(num)) return "DHL";
+  if (/^JD[0-9]{18}$/i.test(num)) return "DHL";
+  if (/^JJD[0-9]{17}$/i.test(num)) return "DHL";
+  
+  // Amazon: TBA followed by digits
+  if (/^TBA[0-9]{12,}$/i.test(num)) return "Amazon Logistics";
+  
+  return null;
+}
 
 // Default supply items (fallback if no custom catalog exists)
 const defaultSupplyItems = [
@@ -727,6 +758,52 @@ export function DeliveryManagementClient({
               </ScrollArea>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="add_tracking_number">Tracking Number</Label>
+                <Input
+                  id="add_tracking_number"
+                  placeholder="E.g. 1Z999AA10123456784"
+                  value={formData.tracking_number}
+                  onChange={(e) => {
+                    const trackingNum = e.target.value;
+                    const detectedCarrier = detectCarrierFromTrackingNumber(trackingNum);
+                    setFormData({
+                      ...formData,
+                      tracking_number: trackingNum,
+                      carrier: detectedCarrier || formData.carrier,
+                    });
+                  }}
+                />
+                {formData.tracking_number && detectCarrierFromTrackingNumber(formData.tracking_number) && (
+                  <p className="text-xs text-[#7A9B8E]">
+                    Detected: {detectCarrierFromTrackingNumber(formData.tracking_number)}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="add_carrier">Carrier</Label>
+                <Select
+                  value={formData.carrier}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, carrier: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select carrier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {carrierOptions.map((carrier) => (
+                      <SelectItem key={carrier} value={carrier}>
+                        {carrier}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -829,7 +906,31 @@ export function DeliveryManagementClient({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit_carrier">Carrier</Label>
+                <Label htmlFor="edit_tracking_number">Tracking Number <span className="text-red-500">*</span></Label>
+                <Input
+                  id="edit_tracking_number"
+                  placeholder="E.g. 1Z999AA10123456784"
+                  value={formData.tracking_number}
+                  onChange={(e) => {
+                    const trackingNum = e.target.value;
+                    const detectedCarrier = detectCarrierFromTrackingNumber(trackingNum);
+                    setFormData({
+                      ...formData,
+                      tracking_number: trackingNum,
+                      // Auto-set carrier if detected and not already set
+                      carrier: detectedCarrier || formData.carrier,
+                    });
+                  }}
+                />
+                {formData.tracking_number && detectCarrierFromTrackingNumber(formData.tracking_number) && (
+                  <p className="text-xs text-[#7A9B8E]">
+                    Detected: {detectCarrierFromTrackingNumber(formData.tracking_number)}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit_carrier">Carrier <span className="text-red-500">*</span></Label>
                 <Select
                   value={formData.carrier}
                   onValueChange={(value) =>
@@ -848,26 +949,13 @@ export function DeliveryManagementClient({
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit_tracking_number">Tracking Number</Label>
-                <Input
-                  id="edit_tracking_number"
-                  value={formData.tracking_number}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      tracking_number: e.target.value,
-                    })
-                  }
-                />
-              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_tracking_url">Tracking URL</Label>
+              <Label htmlFor="edit_tracking_url">Tracking URL (Optional)</Label>
               <Input
                 id="edit_tracking_url"
+                placeholder="https://..."
                 value={formData.tracking_url}
                 onChange={(e) =>
                   setFormData({ ...formData, tracking_url: e.target.value })

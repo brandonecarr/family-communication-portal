@@ -5,7 +5,7 @@ import { createClient } from "../../../supabase/server";
 const TRACKING_API_KEY = process.env.TRACKING_API_KEY;
 
 // Carrier codes for 17track API
-const CARRIER_CODES: Record<string, number> = {
+export const CARRIER_CODES: Record<string, number> = {
   ups: 100002,
   fedex: 100003,
   usps: 21051,
@@ -15,8 +15,48 @@ const CARRIER_CODES: Record<string, number> = {
   lasership: 100050,
 };
 
+// Carrier name to code mapping for UI
+export const CARRIER_NAME_TO_CODE: Record<string, number> = {
+  "UPS": 100002,
+  "FedEx": 100003,
+  "USPS": 21051,
+  "DHL": 100001,
+  "Amazon Logistics": 100143,
+  "OnTrac": 100049,
+  "LaserShip": 100050,
+};
+
+// Detect carrier from tracking number format
+export function detectCarrierFromTrackingNumber(trackingNumber: string): string | null {
+  if (!trackingNumber) return null;
+  
+  const num = trackingNumber.toUpperCase().trim();
+  
+  // UPS: starts with 1Z followed by alphanumeric
+  if (/^1Z[A-Z0-9]{16,18}$/i.test(num)) return "UPS";
+  
+  // FedEx: 12-22 digits, or starts with specific patterns
+  if (/^\d{12}$/.test(num) || /^\d{15}$/.test(num) || /^\d{20}$/.test(num) || /^\d{22}$/.test(num)) return "FedEx";
+  if (/^[0-9]{12,22}$/.test(num)) return "FedEx";
+  
+  // USPS: 20-22 digits, or starts with 9 followed by 15-21 digits
+  if (/^9[0-9]{15,21}$/.test(num)) return "USPS";
+  if (/^[0-9]{20,22}$/.test(num)) return "USPS";
+  if (/^(94|93|92|91)[0-9]{18,20}$/.test(num)) return "USPS";
+  
+  // DHL: 10-11 digits or starts with JD/JJD
+  if (/^[0-9]{10,11}$/.test(num)) return "DHL";
+  if (/^JD[0-9]{18}$/i.test(num)) return "DHL";
+  if (/^JJD[0-9]{17}$/i.test(num)) return "DHL";
+  
+  // Amazon: TBA followed by digits
+  if (/^TBA[0-9]{12,}$/i.test(num)) return "Amazon Logistics";
+  
+  return null;
+}
+
 function detectCarrierCode(trackingUrl: string, trackingNumber: string): number | undefined {
-  const url = trackingUrl.toLowerCase();
+  const url = (trackingUrl || "").toLowerCase();
   
   if (url.includes("ups.com")) return CARRIER_CODES.ups;
   if (url.includes("fedex.com")) return CARRIER_CODES.fedex;
@@ -27,9 +67,10 @@ function detectCarrierCode(trackingUrl: string, trackingNumber: string): number 
   if (url.includes("lasership.com")) return CARRIER_CODES.lasership;
   
   // Auto-detect based on tracking number format
-  if (trackingNumber.startsWith("1Z")) return CARRIER_CODES.ups;
-  if (/^\d{12,22}$/.test(trackingNumber)) return CARRIER_CODES.fedex;
-  if (/^\d{20,22}$/.test(trackingNumber) || /^9[0-9]{15,21}$/.test(trackingNumber)) return CARRIER_CODES.usps;
+  const detectedCarrier = detectCarrierFromTrackingNumber(trackingNumber);
+  if (detectedCarrier && CARRIER_NAME_TO_CODE[detectedCarrier]) {
+    return CARRIER_NAME_TO_CODE[detectedCarrier];
+  }
   
   return undefined; // Let 17track auto-detect
 }
@@ -58,38 +99,117 @@ function extractTrackingNumber(trackingUrl: string): string | null {
   return null;
 }
 
+export interface TrackingRegistrationOptions {
+  trackingNumber: string;
+  trackingUrl?: string;
+  deliveryId: string;
+  carrierCode?: number;
+  carrierName?: string;
+  email?: string;
+  orderNumber?: string;
+  orderDate?: string;
+  tag?: string;
+  note?: string;
+}
+
 /**
  * Register a tracking number with 17track for push notifications
- * This should be called when a new delivery is created
+ * This should be called when a new delivery is created or updated with tracking info
  */
 export async function registerTrackingNumber(
-  trackingNumber: string,
-  trackingUrl: string,
-  deliveryId: string
-): Promise<{ success: boolean; error?: string }> {
+  trackingNumberOrOptions: string | TrackingRegistrationOptions,
+  trackingUrl?: string,
+  deliveryId?: string
+): Promise<{ success: boolean; error?: string; detectedCarrier?: string }> {
   if (!TRACKING_API_KEY) {
     console.log("No TRACKING_API_KEY configured, skipping registration");
     return { success: false, error: "Tracking API not configured" };
   }
 
+  // Handle both old signature and new options object
+  let options: TrackingRegistrationOptions;
+  if (typeof trackingNumberOrOptions === "string") {
+    options = {
+      trackingNumber: trackingNumberOrOptions,
+      trackingUrl: trackingUrl || "",
+      deliveryId: deliveryId || "",
+    };
+  } else {
+    options = trackingNumberOrOptions;
+  }
+
+  let { trackingNumber } = options;
+  const { trackingUrl: url, deliveryId: delId, carrierCode, carrierName, email, orderNumber, orderDate, tag, note } = options;
+
   if (!trackingNumber) {
     // Try to extract from URL
-    trackingNumber = extractTrackingNumber(trackingUrl) || "";
+    trackingNumber = extractTrackingNumber(url || "") || "";
     if (!trackingNumber) {
       return { success: false, error: "Could not extract tracking number" };
     }
   }
 
-  const carrierCode = detectCarrierCode(trackingUrl, trackingNumber);
+  // Determine carrier code - use provided code, or detect from name, or auto-detect
+  let finalCarrierCode = carrierCode;
+  let detectedCarrier: string | undefined;
+  
+  if (!finalCarrierCode && carrierName) {
+    finalCarrierCode = CARRIER_NAME_TO_CODE[carrierName];
+    detectedCarrier = carrierName;
+  }
+  
+  if (!finalCarrierCode) {
+    detectedCarrier = detectCarrierFromTrackingNumber(trackingNumber) || undefined;
+    if (detectedCarrier) {
+      finalCarrierCode = CARRIER_NAME_TO_CODE[detectedCarrier];
+    }
+  }
+  
+  if (!finalCarrierCode && url) {
+    finalCarrierCode = detectCarrierCode(url, trackingNumber);
+  }
 
   try {
-    console.log("Registering tracking number with 17track:", trackingNumber);
+    console.log("Registering tracking number with 17track:", {
+      trackingNumber,
+      carrierCode: finalCarrierCode,
+      email,
+      orderNumber,
+      deliveryId: delId,
+    });
     
-    const requestBody = [{
+    // Build the request body according to 17track API v2.4
+    const trackingItem: Record<string, any> = {
       number: trackingNumber,
-      carrier: carrierCode,
-      tag: deliveryId, // Use delivery ID as tag for reference
-    }];
+      tag: tag || delId, // Use delivery ID as tag for reference
+    };
+    
+    // Add carrier if detected
+    if (finalCarrierCode) {
+      trackingItem.carrier = finalCarrierCode;
+    }
+    
+    // Add email for notifications (17track will send updates to this email)
+    if (email) {
+      trackingItem.email = email;
+    }
+    
+    // Add order number if provided
+    if (orderNumber) {
+      trackingItem.order_no = orderNumber;
+    }
+    
+    // Add order date if provided (format: YYYY-MM-DD)
+    if (orderDate) {
+      trackingItem.order_time = orderDate;
+    }
+    
+    // Add note if provided
+    if (note) {
+      trackingItem.note = note;
+    }
+
+    const requestBody = [trackingItem];
 
     const response = await fetch("https://api.17track.net/track/v2.4/register", {
       method: "POST",
@@ -104,26 +224,30 @@ export async function registerTrackingNumber(
     console.log("17track registration response:", JSON.stringify(result, null, 2));
 
     if (result.data?.accepted && result.data.accepted.length > 0) {
-      // Update delivery with tracking number if not already set
+      // Update delivery with tracking number and carrier if not already set
       const supabase = await createClient();
+      const updateData: Record<string, any> = { tracking_number: trackingNumber };
+      if (detectedCarrier) {
+        updateData.carrier = detectedCarrier;
+      }
       await supabase
         .from("deliveries")
-        .update({ tracking_number: trackingNumber })
-        .eq("id", deliveryId);
+        .update(updateData)
+        .eq("id", delId);
       
-      return { success: true };
+      return { success: true, detectedCarrier };
     }
 
     if (result.data?.rejected && result.data.rejected.length > 0) {
       const rejection = result.data.rejected[0];
       // Error code 0 means already registered, which is fine
       if (rejection.error?.code === 0) {
-        return { success: true };
+        return { success: true, detectedCarrier };
       }
-      return { success: false, error: rejection.error?.message || "Registration rejected" };
+      return { success: false, error: rejection.error?.message || "Registration rejected", detectedCarrier };
     }
 
-    return { success: false, error: "Unknown registration response" };
+    return { success: false, error: "Unknown registration response", detectedCarrier };
   } catch (error) {
     console.error("Error registering tracking number:", error);
     return { success: false, error: error instanceof Error ? error.message : "Registration failed" };
