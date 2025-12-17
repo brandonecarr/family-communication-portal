@@ -395,7 +395,7 @@ export function DeliveryManagementClient({
         {filteredDeliveries.map((delivery) => {
           const config =
             statusColors[delivery.status as keyof typeof statusColors] ||
-            statusColors.scheduled;
+            statusColors.ordered;
           const StatusIcon =
             delivery.status === "delivered" ? CheckCircle2 : Truck;
 
