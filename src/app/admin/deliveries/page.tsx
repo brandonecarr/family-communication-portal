@@ -69,7 +69,7 @@ export default async function AdminDeliveriesPage() {
         .in("patient_id", patientIds)
         .order("created_at", { ascending: false });
       
-      deliveries = (data || []) as Delivery[];
+      deliveries = ((data || []).filter((d: any) => d.patient_id) as Delivery[]);
     }
   }
 
