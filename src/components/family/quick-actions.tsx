@@ -45,7 +45,7 @@ export default function QuickActions() {
             <Link key={action.label} href={action.href}>
               <Button
                 variant="outline"
-                className="w-full h-auto flex-col gap-2 py-4 hover:bg-primary/5 hover:border-primary/30 transition-all hover:scale-105"
+                className="w-full h-auto flex-col gap-2 py-4 hover:bg-primary/10 hover:border-primary/30 hover:text-foreground transition-all hover:scale-105"
               >
                 <Icon className={`h-6 w-6 ${action.color}`} />
                 <span className="text-xs font-medium">{action.label}</span>
