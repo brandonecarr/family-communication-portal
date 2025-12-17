@@ -316,6 +316,7 @@ export type Database = {
           notes: string | null
           patient_id: string | null
           status: Database["public"]["Enums"]["delivery_status"] | null
+          supply_request_id: string | null
           tracking_number: string | null
           tracking_url: string | null
           updated_at: string | null
@@ -331,6 +332,7 @@ export type Database = {
           notes?: string | null
           patient_id?: string | null
           status?: Database["public"]["Enums"]["delivery_status"] | null
+          supply_request_id?: string | null
           tracking_number?: string | null
           tracking_url?: string | null
           updated_at?: string | null
@@ -346,6 +348,7 @@ export type Database = {
           notes?: string | null
           patient_id?: string | null
           status?: Database["public"]["Enums"]["delivery_status"] | null
+          supply_request_id?: string | null
           tracking_number?: string | null
           tracking_url?: string | null
           updated_at?: string | null
@@ -356,6 +359,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_supply_request_id_fkey"
+            columns: ["supply_request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -954,6 +964,7 @@ export type Database = {
           notes: string | null
           patient_id: string | null
           requested_by: string | null
+          requested_by_name: string | null
           status: Database["public"]["Enums"]["supply_request_status"] | null
           updated_at: string | null
         }
@@ -968,6 +979,7 @@ export type Database = {
           notes?: string | null
           patient_id?: string | null
           requested_by?: string | null
+          requested_by_name?: string | null
           status?: Database["public"]["Enums"]["supply_request_status"] | null
           updated_at?: string | null
         }
@@ -982,6 +994,7 @@ export type Database = {
           notes?: string | null
           patient_id?: string | null
           requested_by?: string | null
+          requested_by_name?: string | null
           status?: Database["public"]["Enums"]["supply_request_status"] | null
           updated_at?: string | null
         }

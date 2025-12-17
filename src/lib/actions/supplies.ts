@@ -131,39 +131,46 @@ export interface FamilySupplyRequest {
 }
 
 export async function getFamilySupplyRequests(): Promise<FamilySupplyRequest[]> {
-  const supabase = await createClient();
-  
-  // Get current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    throw new Error("Not authenticated");
+  try {
+    const supabase = await createClient();
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      // Return empty array instead of throwing for better UX
+      return [];
+    }
+
+    // Get family member's patient_id
+    const { data: familyMember, error: familyError } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (familyError || !familyMember) {
+      // User is not a family member, return empty array
+      return [];
+    }
+
+    // Get supply requests for this patient
+    const { data, error } = await supabase
+      .from("supply_requests")
+      .select("*")
+      .eq("patient_id", familyMember.patient_id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching supply requests:", error);
+      return [];
+    }
+
+    return (data || []) as FamilySupplyRequest[];
+  } catch (error) {
+    console.error("Unexpected error in getFamilySupplyRequests:", error);
+    return [];
   }
-
-  // Get family member's patient_id
-  const { data: familyMember, error: familyError } = await supabase
-    .from("family_members")
-    .select("patient_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (familyError || !familyMember) {
-    throw new Error("Family member not found");
-  }
-
-  // Get supply requests for this patient
-  const { data, error } = await supabase
-    .from("supply_requests")
-    .select("*")
-    .eq("patient_id", familyMember.patient_id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching supply requests:", error);
-    throw new Error("Failed to fetch supply requests");
-  }
-
-  return (data || []) as FamilySupplyRequest[];
 }
 
 export async function dismissSupplyRequest(requestId: string) {
@@ -179,4 +186,73 @@ export async function dismissSupplyRequest(requestId: string) {
   if (error) throw error;
   
   revalidatePath("/family/supplies");
+}
+
+export async function approveSupplyRequest(requestId: string, approvedByName: string) {
+  const supabase = await createClient();
+  
+  // First get the supply request details
+  const { data: request, error: fetchError } = await supabase
+    .from("supply_requests")
+    .select("*")
+    .eq("id", requestId)
+    .single();
+  
+  if (fetchError || !request) {
+    throw new Error("Supply request not found");
+  }
+  
+  // Update the supply request status to approved
+  const { error: updateError } = await supabase
+    .from("supply_requests")
+    .update({ 
+      status: "approved", 
+      updated_at: new Date().toISOString(),
+      notes: request.notes ? `${request.notes}\n\nApproved by ${approvedByName}` : `Approved by ${approvedByName}`
+    })
+    .eq("id", requestId);
+  
+  if (updateError) throw updateError;
+  
+  // Create a delivery for the approved supply request
+  const itemNames = Object.keys(request.items || {}).join(", ");
+  const { error: deliveryError } = await supabase
+    .from("deliveries")
+    .insert({
+      patient_id: request.patient_id,
+      item_name: itemNames || "Supply Request Items",
+      status: "ordered",
+      notes: `Supply request approved. Items: ${JSON.stringify(request.items)}`
+    });
+  
+  if (deliveryError) throw deliveryError;
+  
+  revalidatePath("/admin/supplies");
+  revalidatePath("/admin/deliveries");
+  revalidatePath("/family/supplies");
+  revalidatePath("/family/deliveries");
+  
+  return request;
+}
+
+export async function rejectSupplyRequest(requestId: string, rejectedByName: string, rejectionReason: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("supply_requests")
+    .update({ 
+      status: "rejected", 
+      updated_at: new Date().toISOString(),
+      notes: `Rejected by ${rejectedByName}: ${rejectionReason}`
+    })
+    .eq("id", requestId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  revalidatePath("/admin/supplies");
+  revalidatePath("/family/supplies");
+  
+  return data;
 }

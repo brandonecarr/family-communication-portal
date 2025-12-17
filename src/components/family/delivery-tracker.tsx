@@ -11,21 +11,23 @@ import { createClient } from "../../../supabase/client";
 interface Delivery {
   id: string;
   item_name: string;
-  carrier: string;
-  tracking_number: string;
+  carrier?: string | null;
+  tracking_number?: string | null;
   status: string;
-  estimated_delivery: string;
-  last_update: string;
-  tracking_url?: string;
+  estimated_delivery?: string | null;
+  last_update?: string | null;
+  tracking_url?: string | null;
+  notes?: string | null;
   created_at: string;
 }
 
 const statusConfig = {
-  scheduled: { label: "Scheduled", color: "bg-muted text-muted-foreground", progress: 20 },
+  ordered: { label: "Ordered", color: "bg-[#D4876F]/20 text-[#D4876F]", progress: 10 },
   shipped: { label: "Shipped", color: "bg-[#B8A9D4]/20 text-[#B8A9D4]", progress: 40 },
   in_transit: { label: "In Transit", color: "bg-[#7A9B8E]/20 text-[#7A9B8E]", progress: 60 },
   out_for_delivery: { label: "Out for Delivery", color: "bg-[#D4876F]/20 text-[#D4876F]", progress: 80 },
   delivered: { label: "Delivered", color: "bg-[#7A9B8E]/20 text-[#7A9B8E]", progress: 100 },
+  exception: { label: "Exception", color: "bg-red-100 text-red-800", progress: 0 },
 };
 
 const carrierUrls: Record<string, (tracking: string) => string> = {
@@ -64,9 +66,29 @@ export default function DeliveryTracker() {
   }, []);
 
   const fetchDeliveries = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Get family member's patient_id
+    const { data: familyMember } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!familyMember?.patient_id) {
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("deliveries")
       .select("*")
+      .eq("patient_id", familyMember.patient_id)
       .order("created_at", { ascending: false });
 
     if (data) {
@@ -77,6 +99,7 @@ export default function DeliveryTracker() {
 
   const getTrackingUrl = (delivery: Delivery) => {
     if (delivery.tracking_url) return delivery.tracking_url;
+    if (!delivery.carrier || !delivery.tracking_number) return null;
     const urlGenerator = carrierUrls[delivery.carrier];
     return urlGenerator ? urlGenerator(delivery.tracking_number) : null;
   };
@@ -121,7 +144,9 @@ export default function DeliveryTracker() {
                       {delivery.item_name}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      {delivery.carrier} • {delivery.tracking_number}
+                      {delivery.carrier && delivery.tracking_number 
+                        ? `${delivery.carrier} • ${delivery.tracking_number}`
+                        : delivery.carrier || "Preparing for shipment"}
                     </p>
                   </div>
                 </div>
@@ -140,15 +165,29 @@ export default function DeliveryTracker() {
               </div>
 
               <div className="bg-[#7A9B8E]/5 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Estimated Delivery</span>
-                  <span className="text-sm text-muted-foreground">
-                    {delivery.estimated_delivery}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {delivery.last_update}
-                </p>
+                {delivery.estimated_delivery && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Estimated Delivery</span>
+                    <span className="text-sm text-muted-foreground">
+                      {delivery.estimated_delivery}
+                    </span>
+                  </div>
+                )}
+                {delivery.last_update && (
+                  <p className="text-xs text-muted-foreground">
+                    {delivery.last_update}
+                  </p>
+                )}
+                {delivery.notes && (
+                  <p className="text-xs text-muted-foreground">
+                    {delivery.notes}
+                  </p>
+                )}
+                {!delivery.estimated_delivery && !delivery.last_update && !delivery.notes && (
+                  <p className="text-xs text-muted-foreground">
+                    Your delivery is being prepared
+                  </p>
+                )}
               </div>
 
               {trackingUrl && (

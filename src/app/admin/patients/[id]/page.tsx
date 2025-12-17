@@ -37,7 +37,7 @@ export default async function PatientDetailsPage({
   }
 
   // Fetch related data
-  const [visitsResult, familyResult, messagesResult, deliveriesResult] = await Promise.all([
+  const [visitsResult, familyResult, messagesResult, deliveriesResult, careTeamResult] = await Promise.all([
     supabase
       .from("visits")
       .select("*")
@@ -60,12 +60,17 @@ export default async function PatientDetailsPage({
       .eq("patient_id", params.id)
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("patient_care_team")
+      .select("*")
+      .eq("patient_id", params.id),
   ]);
 
   const visits = visitsResult.data || [];
   const familyMembers = familyResult.data || [];
   const messages = messagesResult.data || [];
   const deliveries = deliveriesResult.data || [];
+  const careTeamMembers = careTeamResult.data || [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -157,7 +162,7 @@ export default async function PatientDetailsPage({
           </TabsTrigger>
           <TabsTrigger value="team">
             <Stethoscope className="h-4 w-4 mr-2" />
-            Team
+            Team ({careTeamMembers.length})
           </TabsTrigger>
           <TabsTrigger value="deliveries">
             <Package className="h-4 w-4 mr-2" />
@@ -278,10 +283,24 @@ export default async function PatientDetailsPage({
                       <div>
                         <p className="font-medium">{delivery.item_name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {delivery.carrier} - {delivery.tracking_number}
+                          {delivery.carrier && delivery.tracking_number 
+                            ? `${delivery.carrier} - ${delivery.tracking_number}`
+                            : delivery.carrier || "Preparing for shipment"}
                         </p>
+                        {delivery.notes && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {delivery.notes}
+                          </p>
+                        )}
                       </div>
-                      <Badge>{delivery.status}</Badge>
+                      <Badge className={
+                        delivery.status === "ordered" ? "bg-[#D4876F]/20 text-[#D4876F]" :
+                        delivery.status === "delivered" ? "bg-[#7A9B8E]/20 text-[#7A9B8E]" :
+                        delivery.status === "exception" ? "bg-red-100 text-red-800" :
+                        "bg-[#B8A9D4]/20 text-[#B8A9D4]"
+                      }>
+                        {delivery.status?.replace('_', ' ').toUpperCase() || 'ORDERED'}
+                      </Badge>
                     </div>
                   ))}
                 </div>

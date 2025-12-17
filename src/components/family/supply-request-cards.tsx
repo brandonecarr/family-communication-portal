@@ -67,9 +67,13 @@ export default function SupplyRequestCards() {
     try {
       setLoading(true);
       const data = await getFamilySupplyRequests();
-      setRequests(data);
-    } catch (err) {
-      console.error("Error loading supply requests:", err);
+      setRequests(data || []);
+    } catch (err: any) {
+      // Don't log error if user is just not authenticated or not a family member
+      if (err?.message !== "Not authenticated" && err?.message !== "Family member not found") {
+        console.error("Error loading supply requests:", err);
+      }
+      setRequests([]);
     } finally {
       setLoading(false);
     }

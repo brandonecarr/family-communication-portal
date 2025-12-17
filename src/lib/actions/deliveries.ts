@@ -143,7 +143,7 @@ export async function getFamilyPendingDeliveriesCount(): Promise<number> {
       .from("deliveries")
       .select("*", { count: "exact", head: true })
       .eq("patient_id", familyMember.patient_id)
-      .in("status", ["pending", "in_transit", "shipped", "out_for_delivery"]);
+      .in("status", ["ordered", "in_transit", "shipped", "out_for_delivery"]);
 
     if (error) {
       return 0;
