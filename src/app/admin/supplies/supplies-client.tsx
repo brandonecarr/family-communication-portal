@@ -438,10 +438,21 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
                               onApprovalSuccess={() => handleOpenDeliveryDialog(request.patient_id, items, request.id)}
                             />
                           )}
-                          {request.status === "approved" && (
+                          {request.status === "approved" && request.deliveries && request.deliveries.length > 0 && (
                             <Badge variant="outline" className="bg-[#B8A9D4]/20 text-[#B8A9D4] border-0">
                               Delivery Created
                             </Badge>
+                          )}
+                          {request.status === "approved" && (!request.deliveries || request.deliveries.length === 0) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenDeliveryDialog(request.patient_id, items, request.id)}
+                              className="text-[#7A9B8E] border-[#7A9B8E] hover:bg-[#7A9B8E]/10"
+                            >
+                              <Package className="h-4 w-4 mr-1" />
+                              Create Delivery
+                            </Button>
                           )}
                         </div>
                       </div>

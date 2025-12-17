@@ -62,6 +62,9 @@ export async function getSupplyRequests(patientId?: string) {
         first_name,
         last_name,
         agency_id
+      ),
+      deliveries:deliveries!supply_request_id (
+        id
       )
     `)
     .order("created_at", { ascending: false });
