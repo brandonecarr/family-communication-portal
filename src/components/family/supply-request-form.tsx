@@ -80,17 +80,10 @@ export default function SupplyRequestForm() {
         throw new Error("Not authenticated");
       }
 
-      // Get user's name
-      const { data: userData } = await supabase
-        .from("users")
-        .select("name")
-        .eq("id", user.id)
-        .single();
-
-      // Get family member info
+      // Get family member info including name
       const { data: familyMember } = await supabase
         .from("family_members")
-        .select("patient_id")
+        .select("patient_id, name")
         .eq("user_id", user.id)
         .single();
 
@@ -98,10 +91,10 @@ export default function SupplyRequestForm() {
         throw new Error("Family member not found");
       }
 
-      // Create supply request with user's name
+      // Create supply request with family member's name from family_members table
       const { error } = await supabase.from("supply_requests").insert({
         patient_id: familyMember.patient_id,
-        requested_by_name: userData?.name || user.email || "Family Member",
+        requested_by_name: familyMember.name || user.email || "Family Member",
         items: selectedItems,
         notes: notes || null,
         status: "pending",

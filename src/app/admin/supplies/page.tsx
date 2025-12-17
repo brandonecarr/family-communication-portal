@@ -85,37 +85,41 @@ export default async function AdminSuppliesPage() {
         process.env.SUPABASE_SERVICE_KEY!
       );
       
-      // Get all requested_by user IDs
-      const requestedByIds = (data || [])
-        .map((r: any) => r.requested_by)
-        .filter(Boolean);
+      // Get all family members for these patients to look up names
+      const { data: familyMembersData } = await serviceClient
+        .from("family_members")
+        .select("user_id, name, patient_id")
+        .in("patient_id", patientIds);
       
-      // Get names from family_members table (where the name actually is!)
-      const familyMemberNameMap = new Map<string, string>();
-      if (requestedByIds.length > 0) {
-        const { data: familyMembersData } = await serviceClient
-          .from("family_members")
-          .select("user_id, name")
-          .in("user_id", requestedByIds);
-        
-        (familyMembersData || []).forEach((fm: any) => {
-          if (fm.user_id && fm.name) {
-            familyMemberNameMap.set(fm.user_id, fm.name);
+      // Create maps for lookup
+      const userIdToNameMap = new Map<string, string>();
+      const patientIdToFamilyNameMap = new Map<string, string>();
+      
+      (familyMembersData || []).forEach((fm: any) => {
+        if (fm.name) {
+          if (fm.user_id) {
+            userIdToNameMap.set(fm.user_id, fm.name);
           }
-        });
-      }
+          if (fm.patient_id) {
+            // Store first family member name for each patient as fallback
+            if (!patientIdToFamilyNameMap.has(fm.patient_id)) {
+              patientIdToFamilyNameMap.set(fm.patient_id, fm.name);
+            }
+          }
+        }
+      });
       
-      // Map requester names
+      // Map requester names from family_members table
       requests = (data || []).map((request: any) => {
         let requesterName: string | null = null;
         
-        // Priority 1: Check requested_by_name (TEXT column)
-        if (request.requested_by_name) {
-          requesterName = request.requested_by_name;
+        // Priority 1: Look up by user_id (requested_by)
+        if (request.requested_by && userIdToNameMap.has(request.requested_by)) {
+          requesterName = userIdToNameMap.get(request.requested_by)!;
         }
-        // Priority 2: Look up name from family_members table using requested_by UUID
-        else if (request.requested_by && familyMemberNameMap.has(request.requested_by)) {
-          requesterName = familyMemberNameMap.get(request.requested_by)!;
+        // Priority 2: Look up by patient_id
+        else if (request.patient_id && patientIdToFamilyNameMap.has(request.patient_id)) {
+          requesterName = patientIdToFamilyNameMap.get(request.patient_id)!;
         }
         
         return {

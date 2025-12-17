@@ -331,7 +331,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                           </span>
                           <span className="flex items-center gap-1.5">
                             <User className="h-3.5 w-3.5" />
-                            {request.requester?.name || request.requested_by_name || "Family Member"}
+                            {request.requester?.name || "Family Member"}
                           </span>
                         </div>
 
