@@ -28,15 +28,21 @@ interface Delivery {
   is_archived?: boolean;
 }
 
-interface TrackingDetails {
+interface TrackingEvent {
   status: string;
   location?: string;
-  timestamp?: string;
-  events?: Array<{
-    status: string;
-    location?: string;
-    timestamp: string;
-  }>;
+  timestamp: string;
+  isCompleted: boolean;
+}
+
+interface TrackingDetails {
+  trackingNumber?: string;
+  carrier?: string;
+  currentStatus: string;
+  estimatedDelivery?: string;
+  shipTo?: string;
+  events: TrackingEvent[];
+  deliveryStatus?: "label_created" | "in_transit" | "out_for_delivery" | "delivered";
   error?: string;
 }
 
@@ -65,32 +71,40 @@ export default function DeliveryTracker() {
   const [loadingTracking, setLoadingTracking] = useState<Record<string, boolean>>({});
   const supabase = createClient();
 
-  const fetchTrackingDetails = async (deliveryId: string, trackingUrl: string) => {
-    if (trackingDetails[deliveryId]) return;
+  const getTrackingUrl = (delivery: Delivery) => {
+    if (delivery.tracking_url) return delivery.tracking_url;
+    if (!delivery.carrier || !delivery.tracking_number) return null;
+    const urlGenerator = carrierUrls[delivery.carrier];
+    return urlGenerator ? urlGenerator(delivery.tracking_number) : null;
+  };
+
+  const fetchTrackingDetails = async (deliveryId: string, trackingUrl: string, forceRefresh = false) => {
+    if (trackingDetails[deliveryId] && !forceRefresh) return;
     
     setLoadingTracking((prev) => ({ ...prev, [deliveryId]: true }));
     
     try {
-      // Since we can't directly scrape tracking pages due to CORS,
-      // we'll display the tracking URL and provide a link to view details
-      // In a production environment, you would use carrier APIs or a tracking service
+      const response = await fetch("/api/tracking", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ trackingUrl, deliveryId }),
+      });
+
+      const data = await response.json();
+      
       setTrackingDetails((prev) => ({
         ...prev,
-        [deliveryId]: {
-          status: "Tracking information available",
-          events: [
-            {
-              status: "Click the link below to view full tracking details",
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        },
+        [deliveryId]: data,
       }));
     } catch (error) {
+      console.error("Error fetching tracking details:", error);
       setTrackingDetails((prev) => ({
         ...prev,
         [deliveryId]: {
-          status: "Unable to fetch tracking details",
+          currentStatus: "Unable to fetch tracking details",
+          events: [],
           error: "Please click the tracking link to view details on the carrier website",
         },
       }));
@@ -191,13 +205,6 @@ export default function DeliveryTracker() {
       }
     }
     setLoading(false);
-  };
-
-  const getTrackingUrl = (delivery: Delivery) => {
-    if (delivery.tracking_url) return delivery.tracking_url;
-    if (!delivery.carrier || !delivery.tracking_number) return null;
-    const urlGenerator = carrierUrls[delivery.carrier];
-    return urlGenerator ? urlGenerator(delivery.tracking_number) : null;
   };
 
   if (loading) {
@@ -371,9 +378,9 @@ export default function DeliveryTracker() {
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-3">
-                    <div className="bg-muted/30 rounded-xl p-4 space-y-3">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       {loadingTracking[delivery.id] ? (
-                        <div className="flex items-center justify-center py-4">
+                        <div className="flex items-center justify-center py-8">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           <span className="ml-2 text-sm text-muted-foreground">
                             Loading tracking details...
@@ -381,56 +388,144 @@ export default function DeliveryTracker() {
                         </div>
                       ) : trackingUrl ? (
                         <>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-[#7A9B8E]" />
-                              <span className="text-sm font-medium">
-                                {trackingDetails[delivery.id]?.status || "Tracking information available"}
-                              </span>
-                            </div>
-                            {trackingDetails[delivery.id]?.events?.map((event, index) => (
-                              <div
-                                key={index}
-                                className="ml-4 pl-3 border-l-2 border-muted py-1"
-                              >
-                                <p className="text-sm text-muted-foreground">
-                                  {event.status}
+                          {trackingDetails[delivery.id] ? (
+                            <div className="divide-y divide-gray-100">
+                              {/* Header Section */}
+                              <div className="p-4 bg-gray-50">
+                                <p className="text-xs text-muted-foreground">Your shipment</p>
+                                <p className="font-mono text-sm font-medium">
+                                  {trackingDetails[delivery.id]?.trackingNumber || delivery.tracking_number || "N/A"}
                                 </p>
-                                {event.location && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {event.location}
-                                  </p>
-                                )}
                               </div>
-                            ))}
-                          </div>
-                          <div className="pt-2 border-t border-muted">
-                            <p className="text-xs text-muted-foreground mb-2">
-                              Tracking URL:
-                            </p>
-                            <a
-                              href={trackingUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-[#7A9B8E] hover:text-[#6A8B7E] underline break-all"
-                            >
-                              {trackingUrl}
-                            </a>
-                          </div>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="w-full rounded-full mt-2"
-                            asChild
-                          >
-                            <a href={trackingUrl} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              View Full Tracking on Carrier Site
-                            </a>
-                          </Button>
+
+                              {/* Estimated Delivery */}
+                              <div className="p-4">
+                                <p className="text-[#7A9B8E] font-medium text-sm">
+                                  {trackingDetails[delivery.id]?.estimatedDelivery || 
+                                   "Estimated delivery date will be available when carrier receives the package."}
+                                </p>
+                              </div>
+
+                              {/* Ship To */}
+                              {trackingDetails[delivery.id]?.shipTo && (
+                                <div className="p-4">
+                                  <p className="text-xs text-muted-foreground font-medium mb-1">Ship To</p>
+                                  <p className="text-sm font-medium">{trackingDetails[delivery.id]?.shipTo}</p>
+                                </div>
+                              )}
+
+                              {/* Tracking Timeline */}
+                              <div className="p-4">
+                                <div className="relative">
+                                  {trackingDetails[delivery.id]?.events?.map((event, index) => {
+                                    const isLast = index === (trackingDetails[delivery.id]?.events?.length || 0) - 1;
+                                    const isFirst = index === 0;
+                                    
+                                    return (
+                                      <div key={index} className="flex items-start gap-3 pb-4 last:pb-0">
+                                        {/* Timeline indicator */}
+                                        <div className="flex flex-col items-center">
+                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                                            event.isCompleted 
+                                              ? "bg-[#7A9B8E] border-[#7A9B8E]" 
+                                              : "bg-white border-gray-300"
+                                          }`}>
+                                            {event.isCompleted && (
+                                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </div>
+                                          {!isLast && (
+                                            <div className={`w-0.5 h-8 ${
+                                              event.isCompleted ? "bg-[#7A9B8E]" : "bg-gray-200"
+                                            }`} style={{ borderStyle: event.isCompleted ? "solid" : "dashed" }} />
+                                          )}
+                                        </div>
+                                        
+                                        {/* Event content */}
+                                        <div className="flex-1 pt-0.5">
+                                          <p className={`text-sm font-medium ${
+                                            event.isCompleted ? "text-gray-900" : "text-gray-400"
+                                          }`}>
+                                            {event.status}
+                                          </p>
+                                          {event.location && event.isCompleted && (
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                              {event.location}
+                                            </p>
+                                          )}
+                                          {event.timestamp && event.isCompleted && (
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                              {event.timestamp}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Error message if any */}
+                              {trackingDetails[delivery.id]?.error && (
+                                <div className="p-4 bg-yellow-50">
+                                  <p className="text-sm text-yellow-800">
+                                    {trackingDetails[delivery.id]?.error}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* View All Shipping Details Link */}
+                              <div className="p-4">
+                                <a
+                                  href={trackingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center text-sm text-[#7A9B8E] hover:text-[#6A8B7E] font-medium"
+                                >
+                                  View All Shipping Details
+                                  <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </a>
+                              </div>
+
+                              {/* Refresh Button */}
+                              <div className="p-4 bg-gray-50">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => fetchTrackingDetails(delivery.id, trackingUrl, true)}
+                                  disabled={loadingTracking[delivery.id]}
+                                >
+                                  {loadingTracking[delivery.id] ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Refreshing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                      Refresh Tracking
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <p className="text-sm text-muted-foreground">
+                                Click to load tracking details
+                              </p>
+                            </div>
+                          )}
                         </>
                       ) : (
-                        <div className="text-center py-4">
+                        <div className="text-center py-8">
                           <p className="text-sm text-muted-foreground">
                             Tracking information will be available once the shipment is confirmed
                           </p>

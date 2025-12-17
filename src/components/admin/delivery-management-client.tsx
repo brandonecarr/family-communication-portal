@@ -118,6 +118,7 @@ export function DeliveryManagementClient({
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [trackingLink, setTrackingLink] = useState("");
+  const [newStatus, setNewStatus] = useState<string>("");
   const { toast } = useToast();
 
   // Form state
@@ -212,17 +213,22 @@ export function DeliveryManagementClient({
   };
 
   const handleUpdateStatus = async () => {
-    if (!selectedDelivery || !trackingLink) return;
+    if (!selectedDelivery || !newStatus) return;
 
     setIsLoading(true);
     try {
+      const updateData: any = { status: newStatus };
+      if (trackingLink) {
+        updateData.tracking_url = trackingLink;
+      }
+      if (newStatus === "delivered") {
+        updateData.delivered_at = new Date().toISOString();
+      }
+
       const response = await fetch(`/api/deliveries/${selectedDelivery.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          status: "shipped",
-          tracking_url: trackingLink 
-        }),
+        body: JSON.stringify(updateData),
       });
 
       if (!response.ok) throw new Error("Failed to update status");
@@ -236,9 +242,18 @@ export function DeliveryManagementClient({
       setShowStatusDialog(false);
       setSelectedDelivery(null);
       setTrackingLink("");
+      setNewStatus("");
+      
+      const statusLabels: Record<string, string> = {
+        shipped: "Shipped (Label Created)",
+        in_transit: "In Transit",
+        out_for_delivery: "Out for Delivery",
+        delivered: "Delivered",
+      };
+      
       toast({
-        title: "Shipment Confirmed",
-        description: "The delivery has been marked as shipped.",
+        title: "Status Updated",
+        description: `The delivery has been updated to "${statusLabels[newStatus] || newStatus}".`,
       });
     } catch (error) {
       toast({
@@ -338,6 +353,8 @@ export function DeliveryManagementClient({
 
   const openStatusDialog = (delivery: Delivery) => {
     setSelectedDelivery(delivery);
+    setNewStatus(delivery.status || "shipped");
+    setTrackingLink(delivery.tracking_url || "");
     setShowStatusDialog(true);
   };
 
@@ -798,11 +815,11 @@ export function DeliveryManagementClient({
 
       {/* Update Status Dialog */}
       <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle>Update Delivery Status</DialogTitle>
             <DialogDescription>
-              Enter the tracking link to confirm shipment
+              Update the delivery status and tracking information
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -819,7 +836,24 @@ export function DeliveryManagementClient({
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="tracking-link">Tracking Link</Label>
+                <Label htmlFor="new-status">New Status</Label>
+                <Select
+                  value={newStatus}
+                  onValueChange={setNewStatus}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="shipped">Shipped (Label Created)</SelectItem>
+                    <SelectItem value="in_transit">In Transit (On the Way)</SelectItem>
+                    <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tracking-link">Tracking Link (optional)</Label>
                 <Input
                   id="tracking-link"
                   type="url"
@@ -827,19 +861,22 @@ export function DeliveryManagementClient({
                   value={trackingLink}
                   onChange={(e) => setTrackingLink(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Paste the tracking URL from UPS, FedEx, USPS, DHL, or any carrier
+                </p>
               </div>
               <Button
                 onClick={handleUpdateStatus}
-                disabled={!trackingLink || isLoading}
+                disabled={!newStatus || isLoading}
                 className="w-full"
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Confirming...
+                    Updating...
                   </>
                 ) : (
-                  "Confirm Shipment"
+                  "Update Status"
                 )}
               </Button>
             </div>
