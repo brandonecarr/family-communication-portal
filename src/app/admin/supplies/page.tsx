@@ -56,7 +56,7 @@ export default async function AdminSuppliesPage() {
       .select("id")
       .eq("agency_id", agencyId);
     
-    const patientIds = patients?.map(p => p.id) || [];
+    const patientIds = patients?.map((p: { id: string }) => p.id) || [];
     
     if (patientIds.length > 0) {
       const { data } = await supabase
