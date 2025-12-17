@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, Truck, CheckCircle2, ExternalLink, Archive, ChevronDown, Loader2 } from "lucide-react";
+import { Package, Truck, CheckCircle2, ExternalLink, Archive, ChevronDown, Loader2, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { createClient } from "../../../supabase/client";
+import Link from "next/link";
 
 interface Delivery {
   id: string;
@@ -216,15 +217,20 @@ export default function DeliveryTracker() {
   if (displayDeliveries.length === 0 && !showArchived) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setShowArchived(true)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 h-10 px-4 py-2 text-sm font-medium"
           >
             <Archive className="h-4 w-4" />
             View Archived
+          </Button>
+          <Button asChild className="bg-[#7A9B8E] hover:bg-[#6a8b7e] text-white h-10 px-4 py-2 text-sm font-medium">
+            <Link href="/family/supplies" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Request Supplies
+            </Link>
           </Button>
         </div>
         <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -243,15 +249,20 @@ export default function DeliveryTracker() {
   if (displayDeliveries.length === 0 && showArchived) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button
-            variant="default"
-            size="sm"
+            variant="outline"
             onClick={() => setShowArchived(false)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 h-10 px-4 py-2 text-sm font-medium"
           >
             <Package className="h-4 w-4" />
             View Active
+          </Button>
+          <Button asChild className="bg-[#7A9B8E] hover:bg-[#6a8b7e] text-white h-10 px-4 py-2 text-sm font-medium">
+            <Link href="/family/supplies" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Request Supplies
+            </Link>
           </Button>
         </div>
         <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -268,12 +279,11 @@ export default function DeliveryTracker() {
   }
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <Button
-          variant={showArchived ? "default" : "outline"}
-          size="sm"
+          variant="outline"
           onClick={() => setShowArchived(!showArchived)}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 h-10 px-4 py-2 text-sm font-medium"
         >
           {showArchived ? (
             <>
@@ -286,6 +296,12 @@ export default function DeliveryTracker() {
               View Archived
             </>
           )}
+        </Button>
+        <Button asChild className="bg-[#7A9B8E] hover:bg-[#6a8b7e] text-white h-10 px-4 py-2 text-sm font-medium">
+          <Link href="/family/supplies" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Request Supplies
+          </Link>
         </Button>
       </div>
       <div className="grid gap-6">

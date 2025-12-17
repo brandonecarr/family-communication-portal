@@ -102,8 +102,21 @@ export async function createDelivery(deliveryData: {
   
   if (error) throw error;
   
+  // Archive the supply request if delivery is shipped and has a supply_request_id
+  if (deliveryData.supply_request_id && deliveryData.status === "shipped") {
+    await supabase
+      .from("supply_requests")
+      .update({ 
+        status: "archived",
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", deliveryData.supply_request_id);
+  }
+  
   revalidatePath("/admin/deliveries");
   revalidatePath("/family/deliveries");
+  revalidatePath("/admin/supplies");
+  revalidatePath("/family/supplies");
   
   return data;
 }
@@ -131,6 +144,20 @@ export async function updateDeliveryStatus(
     .single();
   
   if (error) throw error;
+  
+  // Archive the supply request if delivery status changes to shipped
+  if (status === "shipped" && data?.supply_request_id) {
+    await supabase
+      .from("supply_requests")
+      .update({ 
+        status: "archived",
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", data.supply_request_id);
+    
+    revalidatePath("/admin/supplies");
+    revalidatePath("/family/supplies");
+  }
   
   revalidatePath("/admin/deliveries");
   revalidatePath("/family/deliveries");

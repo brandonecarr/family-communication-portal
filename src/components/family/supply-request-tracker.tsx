@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Package, CheckCircle2, Clock, XCircle, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { createClient } from "../../../supabase/client";
+import Link from "next/link";
 
 interface SupplyRequest {
   id: string;
@@ -107,22 +108,26 @@ export default function SupplyRequestTracker() {
     );
   }
 
-  if (requests.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <Package className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground text-center">
-            No supply requests yet
-          </p>
-        </CardContent>
-      </Card>
-    );
+  // Filter out archived requests and only show active ones
+  const activeRequests = requests.filter(r => r.status !== 'archived');
+
+  // Hide the section entirely if there are no active requests
+  if (activeRequests.length === 0) {
+    return null;
   }
 
   return (
     <div className="space-y-4">
-      {requests.map((request) => {
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Supply Requests</h2>
+        <Button asChild variant="outline" size="sm" className="hover:bg-primary/10 hover:text-foreground">
+          <Link href="/family/supplies">
+            <Plus className="h-4 w-4 mr-2" />
+            Request Supplies
+          </Link>
+        </Button>
+      </div>
+      {activeRequests.map((request) => {
         const status = statusConfig[request.status as keyof typeof statusConfig] || statusConfig.pending;
         const StatusIcon = status.icon;
         

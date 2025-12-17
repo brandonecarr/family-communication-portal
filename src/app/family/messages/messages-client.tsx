@@ -369,19 +369,18 @@ export default function FamilyMessagesClient({
         <div className="flex items-center gap-2">
           <Button
             variant={showArchived ? "default" : "outline"}
-            size="sm"
             onClick={() => {
               setShowArchived(!showArchived);
               setSelectedThread(null);
             }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 h-10 px-4 py-2 text-sm font-medium"
           >
             <Archive className="h-4 w-4" />
             {showArchived ? "View Active" : "View Archives"}
           </Button>
           <Button
             onClick={handleOpenCreateDialog}
-            className="bg-[#7A9B8E] hover:bg-[#6a8b7e] text-white"
+            className="bg-[#7A9B8E] hover:bg-[#6a8b7e] text-white h-10 px-4 py-2 text-sm font-medium"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Message

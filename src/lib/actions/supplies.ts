@@ -150,6 +150,28 @@ export async function deleteSupplyRequest(requestId: string) {
   revalidatePath("/family/supplies");
 }
 
+export async function archiveSupplyRequest(requestId: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("supply_requests")
+    .update({ 
+      status: "archived",
+      updated_at: new Date().toISOString() 
+    })
+    .eq("id", requestId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  revalidatePath("/admin/supplies");
+  revalidatePath("/family/supplies");
+  revalidatePath("/family/deliveries");
+  
+  return data;
+}
+
 export interface FamilySupplyRequest {
   id: string;
   patient_id: string;
