@@ -1045,8 +1045,8 @@ export async function getTotalUnreadMessageCount(): Promise<number> {
     let unreadCount = 0;
     for (const msg of messages) {
       if (!readMessageIds.has(msg.id)) {
-        const lastRead = lastReadMap.get(msg.thread_id);
-        if (!lastRead || new Date(msg.created_at) > new Date(lastRead)) {
+        const lastRead = lastReadMap.get(msg.thread_id) as string | undefined;
+        if (!lastRead || new Date(msg.created_at) > new Date(lastRead as string)) {
           unreadCount++;
         }
       }
