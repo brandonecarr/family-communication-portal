@@ -102,6 +102,21 @@ export async function createDelivery(deliveryData: {
   
   if (error) throw error;
   
+  // Register tracking number with 17track for push notifications
+  if (data && (deliveryData.tracking_url || deliveryData.tracking_number)) {
+    try {
+      const { registerTrackingNumber } = await import("./tracking");
+      await registerTrackingNumber(
+        deliveryData.tracking_number || "",
+        deliveryData.tracking_url || "",
+        data.id
+      );
+    } catch (trackingError) {
+      console.error("Failed to register tracking number:", trackingError);
+      // Don't fail the delivery creation if tracking registration fails
+    }
+  }
+  
   // Archive the supply request if delivery is shipped and has a supply_request_id
   if (deliveryData.supply_request_id && deliveryData.status === "shipped") {
     await supabase

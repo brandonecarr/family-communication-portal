@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "../../../../../supabase/server";
+import { createClient } from "@/../supabase/server";
 
 // 17track webhook endpoint
-// Register this URL in your 17track dashboard: https://family-communication-portal.vercel.app/api/webhooks/17track
+// Register this URL in your 17track dashboard: https://verawaycare.com/api/webhooks/17track
 
 export async function POST(request: Request) {
   try {

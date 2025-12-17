@@ -34,6 +34,7 @@ import {
   ExternalLink,
   Loader2,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -130,6 +131,7 @@ export function DeliveryManagementClient({
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncingTracking, setIsSyncingTracking] = useState(false);
   const [trackingLink, setTrackingLink] = useState("");
   const [newStatus, setNewStatus] = useState<string>("");
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(defaultSupplyItems);
@@ -183,6 +185,46 @@ export function DeliveryManagementClient({
     } catch (error) {
       console.error("Error fetching supply catalog:", error);
       // Keep default items on error
+    }
+  };
+
+  // Sync all tracking numbers with 17track
+  const syncAllTracking = async () => {
+    setIsSyncingTracking(true);
+    try {
+      const response = await fetch("/api/tracking/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      
+      if (result.registered > 0 || result.total > 0) {
+        toast({
+          title: "Tracking Sync Complete",
+          description: `Registered ${result.registered} of ${result.total} tracking numbers with 17track`,
+        });
+        // Refresh deliveries to get updated statuses
+        const { data } = await supabase
+          .from("deliveries")
+          .select("*, patients(first_name, last_name)")
+          .order("created_at", { ascending: false });
+        if (data) setDeliveries(data);
+      } else {
+        toast({
+          title: "No Tracking Numbers",
+          description: "No deliveries with tracking URLs found to sync",
+        });
+      }
+    } catch (error) {
+      console.error("Error syncing tracking:", error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync tracking numbers. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingTracking(false);
     }
   };
 
@@ -431,13 +473,28 @@ export function DeliveryManagementClient({
             Track and manage all deliveries
           </p>
         </div>
-        <Button
-          className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full gap-2"
-          onClick={() => setShowAddDialog(true)}
-        >
-          <Plus className="h-4 w-4" />
-          Add Delivery
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full gap-2"
+            onClick={syncAllTracking}
+            disabled={isSyncingTracking}
+          >
+            {isSyncingTracking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Sync Tracking
+          </Button>
+          <Button
+            className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full gap-2"
+            onClick={() => setShowAddDialog(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Add Delivery
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
