@@ -104,7 +104,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<{name: string, quantity: number}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
@@ -124,22 +124,25 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
   });
 
   const toggleItem = (itemName: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemName) 
-        ? prev.filter(i => i !== itemName)
-        : [...prev, itemName]
-    );
+    setSelectedItems(prev => {
+      const exists = prev.find(i => i.name === itemName);
+      if (exists) {
+        return prev.filter(i => i.name !== itemName);
+      }
+      return [...prev, { name: itemName, quantity: 1 }];
+    });
   };
   
   const removeItem = (itemName: string) => {
-    setSelectedItems(prev => prev.filter(i => i !== itemName));
+    setSelectedItems(prev => prev.filter(i => i.name !== itemName));
   };
 
   const handleOpenDeliveryDialog = (patientId: string, requestedItems: Record<string, number>) => {
-    // Convert requested items to array of item names
-    const itemNames = Object.keys(requestedItems).map(key => 
-      key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-    );
+    // Convert requested items to array with quantities
+    const itemsWithQuantities = Object.entries(requestedItems).map(([key, quantity]) => ({
+      name: key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+      quantity: quantity
+    }));
     
     setFormData({
       patient_id: patientId,
@@ -150,7 +153,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
       estimated_delivery: "",
       notes: "",
     });
-    setSelectedItems(itemNames);
+    setSelectedItems(itemsWithQuantities);
     setShowDeliveryDialog(true);
   };
 
@@ -166,7 +169,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
 
     setIsLoading(true);
     try {
-      const itemName = selectedItems.join(", ");
+      const itemName = selectedItems.map(i => `${i.name} (${i.quantity})`).join(", ");
       const deliveryData = { ...formData, item_name: itemName };
       
       const response = await fetch("/api/deliveries", {
@@ -399,14 +402,14 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                 <div className="flex flex-wrap gap-2 mb-2">
                   {selectedItems.map((item) => (
                     <Badge
-                      key={item}
+                      key={item.name}
                       variant="secondary"
-                      className="flex items-center gap-1 bg-[#7A9B8E]/20 text-[#7A9B8E]"
+                      className="flex items-center gap-1 bg-[#D4876F]/20 text-[#D4876F]"
                     >
-                      {item}
+                      {item.name} × {item.quantity}
                       <button
                         type="button"
-                        onClick={() => removeItem(item)}
+                        onClick={() => removeItem(item.name)}
                         className="ml-1 hover:text-red-500"
                       >
                         <X className="h-3 w-3" />
@@ -427,7 +430,7 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                             <div key={item.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`add-${item.id}`}
-                                checked={selectedItems.includes(item.name)}
+                                checked={selectedItems.some(i => i.name === item.name)}
                                 onCheckedChange={() => toggleItem(item.name)}
                               />
                               <label
@@ -445,90 +448,28 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
               </ScrollArea>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="carrier">Carrier</Label>
-                <Select
-                  value={formData.carrier}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, carrier: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select carrier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {carrierOptions.map((carrier) => (
-                      <SelectItem key={carrier} value={carrier}>
-                        {carrier}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="status">Status *</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, status: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ordered">Ordered</SelectItem>
-                    <SelectItem value="shipped">Shipped</SelectItem>
-                    <SelectItem value="in_transit">In Transit</SelectItem>
-                    <SelectItem value="out_for_delivery">
-                      Out for Delivery
-                    </SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="exception">Exception</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <Label htmlFor="tracking_number">Tracking Number</Label>
-              <Input
-                id="tracking_number"
-                placeholder="Enter tracking number"
-                value={formData.tracking_number}
-                onChange={(e) =>
-                  setFormData({ ...formData, tracking_number: e.target.value })
+              <Label htmlFor="status">Status *</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, status: value })
                 }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tracking_url">Tracking URL</Label>
-              <Input
-                id="tracking_url"
-                placeholder="https://..."
-                value={formData.tracking_url}
-                onChange={(e) =>
-                  setFormData({ ...formData, tracking_url: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="estimated_delivery">Estimated Delivery</Label>
-              <Input
-                id="estimated_delivery"
-                type="date"
-                value={formData.estimated_delivery}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    estimated_delivery: e.target.value,
-                  })
-                }
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ordered">Ordered</SelectItem>
+                  <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="in_transit">In Transit</SelectItem>
+                  <SelectItem value="out_for_delivery">
+                    Out for Delivery
+                  </SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="exception">Exception</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

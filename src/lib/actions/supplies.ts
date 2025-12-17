@@ -214,18 +214,7 @@ export async function approveSupplyRequest(requestId: string, approvedByName: st
   
   if (updateError) throw updateError;
   
-  // Create a delivery for the approved supply request
-  const itemNames = Object.keys(request.items || {}).join(", ");
-  const { error: deliveryError } = await supabase
-    .from("deliveries")
-    .insert({
-      patient_id: request.patient_id,
-      item_name: itemNames || "Supply Request Items",
-      status: "ordered",
-      notes: `Supply request approved. Items: ${JSON.stringify(request.items)}`
-    });
-  
-  if (deliveryError) throw deliveryError;
+  // Note: Delivery is created manually via the dialog after approval
   
   revalidatePath("/admin/supplies");
   revalidatePath("/admin/deliveries");
