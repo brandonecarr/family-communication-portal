@@ -174,3 +174,42 @@ export async function deleteVisit(visitId: string) {
   revalidatePath("/admin/patients");
   revalidatePath("/family");
 }
+
+// Get upcoming visits count for family member's patient
+export async function getFamilyUpcomingVisitsCount(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+
+    // Get family member's patient_id
+    const { data: familyMember, error: familyError } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    // User might not be a family member (could be admin), return 0 silently
+    if (familyError || !familyMember?.patient_id) return 0;
+
+    // Get today's date
+    const today = new Date().toISOString().split('T')[0];
+
+    // Count upcoming visits (scheduled for today or future)
+    const { count, error } = await supabase
+      .from("visits")
+      .select("*", { count: "exact", head: true })
+      .eq("patient_id", familyMember.patient_id)
+      .gte("scheduled_date", today)
+      .in("status", ["scheduled", "en_route"]);
+
+    if (error) {
+      return 0;
+    }
+
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}

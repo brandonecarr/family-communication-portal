@@ -1,54 +1,91 @@
 "use client";
 
-import { Phone, Mail, MessageSquare } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Phone, Mail, MessageSquare, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-const careTeam = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    role: "Registered Nurse",
-    discipline: "RN",
-    phone: "(555) 123-4567",
-    email: "sarah.j@hospice.com",
-    description: "Provides skilled nursing care, medication management, and symptom assessment",
-    initials: "SJ",
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    role: "Home Health Aide",
-    discipline: "HHA",
-    phone: "(555) 234-5678",
-    email: "michael.c@hospice.com",
-    description: "Assists with personal care, bathing, and daily living activities",
-    initials: "MC",
-  },
-  {
-    id: 3,
-    name: "Emily Rodriguez",
-    role: "Physical Therapist",
-    discipline: "PT",
-    phone: "(555) 345-6789",
-    email: "emily.r@hospice.com",
-    description: "Helps maintain mobility and provides therapeutic exercises",
-    initials: "ER",
-  },
-  {
-    id: 4,
-    name: "Dr. James Wilson",
-    role: "Medical Director",
-    discipline: "MD",
-    phone: "(555) 456-7890",
-    email: "james.w@hospice.com",
-    description: "Oversees medical care and coordinates treatment plans",
-    initials: "JW",
-  },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { getFamilyPatientCareTeam, type CareTeamMemberForFamily } from "@/lib/actions/patient-care-team";
+import Link from "next/link";
 
 export default function CareTeamDirectory() {
+  const [careTeam, setCareTeam] = useState<CareTeamMemberForFamily[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadCareTeam() {
+      try {
+        setLoading(true);
+        const data = await getFamilyPatientCareTeam();
+        setCareTeam(data);
+      } catch (err) {
+        console.error("Error loading care team:", err);
+        setError("Unable to load care team information");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCareTeam();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="soft-shadow-lg border-0 overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <Skeleton className="h-16 w-16 rounded-full" />
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <Skeleton className="h-5 w-32 mb-2" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Skeleton className="h-9 flex-1" />
+                    <Skeleton className="h-9 flex-1" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="soft-shadow-lg border-0">
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (careTeam.length === 0) {
+    return (
+      <Card className="soft-shadow-lg border-0">
+        <CardContent className="p-8 text-center">
+          <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+          <h3 className="font-semibold text-lg mb-2">No Care Team Assigned Yet</h3>
+          <p className="text-muted-foreground">
+            Your care team members will appear here once they have been assigned to your loved one.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {careTeam.map((member) => (
@@ -75,25 +112,40 @@ export default function CareTeamDirectory() {
                 </p>
 
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{member.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{member.email}</span>
-                  </div>
+                  {member.phone && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{member.phone}</span>
+                    </div>
+                  )}
+                  {member.email && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{member.email}</span>
+                    </div>
+                  )}
+                  {!member.phone && !member.email && (
+                    <p className="text-muted-foreground text-xs italic">
+                      Contact information not available
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button size="sm" className="flex-1 gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Message
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1 gap-2">
-                    <Phone className="h-4 w-4" />
-                    Call
-                  </Button>
+                  <Link href="/family/messages/new" className="flex-1">
+                    <Button size="sm" className="w-full gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Message
+                    </Button>
+                  </Link>
+                  {member.phone && (
+                    <a href={`tel:${member.phone}`} className="flex-1">
+                      <Button size="sm" variant="outline" className="w-full gap-2">
+                        <Phone className="h-4 w-4" />
+                        Call
+                      </Button>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

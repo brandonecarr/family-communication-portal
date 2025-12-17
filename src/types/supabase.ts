@@ -951,6 +951,7 @@ export type Database = {
           fulfilled_at: string | null
           id: string
           items: Json
+          notes: string | null
           patient_id: string | null
           requested_by: string | null
           status: Database["public"]["Enums"]["supply_request_status"] | null
@@ -964,6 +965,7 @@ export type Database = {
           fulfilled_at?: string | null
           id?: string
           items: Json
+          notes?: string | null
           patient_id?: string | null
           requested_by?: string | null
           status?: Database["public"]["Enums"]["supply_request_status"] | null
@@ -977,6 +979,7 @@ export type Database = {
           fulfilled_at?: string | null
           id?: string
           items?: Json
+          notes?: string | null
           patient_id?: string | null
           requested_by?: string | null
           status?: Database["public"]["Enums"]["supply_request_status"] | null

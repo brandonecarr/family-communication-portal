@@ -7,19 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { createClient } from "../../../supabase/client";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 
 interface Visit {
   id: string;
-  date: string;
-  time_window_start: string;
-  time_window_end: string;
+  scheduled_date: string;
+  scheduled_time?: string;
+  time_window_start?: string;
+  time_window_end?: string;
   status: string;
   notes?: string;
   discipline: string;
-  staff: {
-    name: string;
-  };
+  staff_name: string;
 }
 
 const statusConfig = {
@@ -80,15 +79,30 @@ export default function VisitTimeline() {
   }, []);
 
   const fetchVisits = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Get family member's patient_id
+    const { data: familyMember } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!familyMember?.patient_id) {
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("visits")
-      .select(`
-        *,
-        staff:staff_id (
-          name
-        )
-      `)
-      .order("date", { ascending: true })
+      .select("*")
+      .eq("patient_id", familyMember.patient_id)
+      .order("scheduled_date", { ascending: true })
       .limit(10);
 
     if (data) {
@@ -123,20 +137,19 @@ export default function VisitTimeline() {
 
               return (
                 <div key={visit.id} className="relative">
-                  {index < visits.length - 1 && (
-                    <div className="absolute left-5 top-12 bottom-0 w-0.5 border-l-2 border-dashed border-[#7A9B8E]/30" />
-                  )}
-                  
                   <div
                     className={`rounded-2xl border bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:scale-[1.01] ${
                       isCompleted ? "opacity-60" : ""
                     }`}
                   >
                     <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 relative">
                         <div className="h-10 w-10 rounded-full bg-[#7A9B8E]/10 flex items-center justify-center">
                           <StatusIcon className="h-5 w-5 text-[#7A9B8E]" />
                         </div>
+                        {index < visits.length - 1 && (
+                          <div className="absolute left-1/2 -translate-x-1/2 top-10 h-[calc(100%+1.5rem)] w-0.5 border-l-2 border-dashed border-[#7A9B8E]/30" />
+                        )}
                       </div>
 
                       <div className="flex-1 space-y-3">
@@ -145,7 +158,7 @@ export default function VisitTimeline() {
                             <h3 className="font-semibold text-lg">{visit.discipline}</h3>
                             <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                               <User className="h-3 w-3" />
-                              {visit.staff?.name}
+                              {visit.staff_name}
                             </p>
                           </div>
                           <Badge
@@ -159,11 +172,11 @@ export default function VisitTimeline() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Calendar className="h-4 w-4" />
-                            <span>{formatDistanceToNow(new Date(visit.date), { addSuffix: true })}</span>
+                            <span>{format(new Date(visit.scheduled_date), "M/d/yyyy")}</span>
                           </div>
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Clock className="h-4 w-4" />
-                            <span>{visit.time_window_start} - {visit.time_window_end}</span>
+                            <span>{visit.scheduled_time || "Time TBD"}</span>
                           </div>
                         </div>
 

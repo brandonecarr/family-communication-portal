@@ -146,7 +146,7 @@ export default async function PatientDetailsPage({
 
       {/* Tabs for different sections */}
       <Tabs defaultValue="visits" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="visits">
             <Calendar className="h-4 w-4 mr-2" />
             Visits ({visits.length})
@@ -163,7 +163,6 @@ export default async function PatientDetailsPage({
             <Package className="h-4 w-4 mr-2" />
             Deliveries ({deliveries.length})
           </TabsTrigger>
-
         </TabsList>
 
         <TabsContent value="visits" className="space-y-4">

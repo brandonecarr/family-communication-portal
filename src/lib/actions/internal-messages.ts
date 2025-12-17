@@ -1000,3 +1000,60 @@ export async function unarchiveThread(threadId: string) {
   revalidatePath("/admin/messages");
   revalidatePath("/family/messages");
 }
+
+// Get total unread message count for navbar badge
+export async function getTotalUnreadMessageCount(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return 0;
+
+    // Get threads where user is a participant
+    const { data: participations, error: partError } = await supabase
+      .from("thread_participants")
+      .select("thread_id, last_read_at")
+      .eq("user_id", user.id);
+
+    if (partError || !participations || participations.length === 0) return 0;
+
+    const threadIds = participations.map((p: any) => p.thread_id);
+    const lastReadMap = new Map(
+      participations.map((p: any) => [p.thread_id, p.last_read_at])
+    );
+
+    // Get all messages in these threads
+    const { data: messages, error: msgError } = await supabase
+      .from("thread_messages")
+      .select("id, thread_id, sender_id, created_at")
+      .in("thread_id", threadIds)
+      .neq("sender_id", user.id);
+
+    if (msgError || !messages) return 0;
+
+    // Get read receipts
+    const { data: readReceipts } = await supabase
+      .from("message_read_receipts")
+      .select("message_id")
+      .eq("user_id", user.id);
+
+    const readMessageIds = new Set((readReceipts || []).map((r: any) => r.message_id));
+
+    // Count unread messages
+    let unreadCount = 0;
+    for (const msg of messages) {
+      if (!readMessageIds.has(msg.id)) {
+        const lastRead = lastReadMap.get(msg.thread_id);
+        if (!lastRead || new Date(msg.created_at) > new Date(lastRead)) {
+          unreadCount++;
+        }
+      }
+    }
+
+    return unreadCount;
+  } catch {
+    return 0;
+  }
+}

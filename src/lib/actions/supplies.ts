@@ -119,3 +119,64 @@ export async function deleteSupplyRequest(requestId: string) {
   revalidatePath("/admin/supplies");
   revalidatePath("/family/supplies");
 }
+
+export interface FamilySupplyRequest {
+  id: string;
+  patient_id: string;
+  items: Record<string, number>;
+  status: string;
+  notes?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export async function getFamilySupplyRequests(): Promise<FamilySupplyRequest[]> {
+  const supabase = await createClient();
+  
+  // Get current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    throw new Error("Not authenticated");
+  }
+
+  // Get family member's patient_id
+  const { data: familyMember, error: familyError } = await supabase
+    .from("family_members")
+    .select("patient_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (familyError || !familyMember) {
+    throw new Error("Family member not found");
+  }
+
+  // Get supply requests for this patient
+  const { data, error } = await supabase
+    .from("supply_requests")
+    .select("*")
+    .eq("patient_id", familyMember.patient_id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching supply requests:", error);
+    throw new Error("Failed to fetch supply requests");
+  }
+
+  return (data || []) as FamilySupplyRequest[];
+}
+
+export async function dismissSupplyRequest(requestId: string) {
+  const supabase = await createClient();
+  
+  // We'll use a "dismissed" status or just delete it
+  // For now, let's delete it since it's been acknowledged
+  const { error } = await supabase
+    .from("supply_requests")
+    .delete()
+    .eq("id", requestId);
+  
+  if (error) throw error;
+  
+  revalidatePath("/family/supplies");
+}

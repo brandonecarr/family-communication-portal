@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "../../../supabase/server";
+import { createClient } from "../../../supabase/server";
 
 export interface StaffMember {
   id: string;
@@ -237,4 +238,131 @@ export async function removeStaffFromPatient(
   }
 
   return { success: true };
+}
+
+export interface CareTeamMemberForFamily {
+  id: string;
+  name: string;
+  role: string;
+  email: string | null;
+  phone: string | null;
+  description: string;
+  initials: string;
+}
+
+export async function getFamilyPatientCareTeam(): Promise<CareTeamMemberForFamily[]> {
+  const supabase = await createClient();
+  
+  // Get current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    throw new Error("Not authenticated");
+  }
+
+  // Get family member's patient_id
+  const { data: familyMember, error: familyError } = await supabase
+    .from("family_members")
+    .select("patient_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (familyError || !familyMember) {
+    throw new Error("Family member not found");
+  }
+
+  const patientId = familyMember.patient_id;
+
+  // Get patient care team with care_team_members and user details
+  const serviceSupabase = createServiceClient();
+  
+  if (!serviceSupabase) {
+    throw new Error("Failed to create service client");
+  }
+
+  const { data: careTeamAssignments, error: careTeamError } = await serviceSupabase
+    .from("patient_care_team")
+    .select(`
+      id,
+      care_team_member_id,
+      care_team_members (
+        id,
+        user_id,
+        role,
+        first_name,
+        last_name,
+        email,
+        phone
+      )
+    `)
+    .eq("patient_id", patientId);
+
+  if (careTeamError) {
+    console.error("Error fetching care team:", careTeamError);
+    throw new Error("Failed to fetch care team");
+  }
+
+  if (!careTeamAssignments || careTeamAssignments.length === 0) {
+    return [];
+  }
+
+  // Get user details for phone numbers if not in care_team_members
+  const userIds = careTeamAssignments
+    .map((a: any) => a.care_team_members?.user_id)
+    .filter(Boolean);
+
+  const { data: users } = await serviceSupabase
+    .from("users")
+    .select("id, full_name, phone")
+    .in("id", userIds);
+
+  // Role descriptions mapping
+  const roleDescriptions: Record<string, string> = {
+    "Registered Nurse": "Provides skilled nursing care, medication management, and symptom assessment",
+    "RN": "Provides skilled nursing care, medication management, and symptom assessment",
+    "Home Health Aide": "Assists with personal care, bathing, and daily living activities",
+    "HHA": "Assists with personal care, bathing, and daily living activities",
+    "Physical Therapist": "Helps maintain mobility and provides therapeutic exercises",
+    "PT": "Helps maintain mobility and provides therapeutic exercises",
+    "Medical Director": "Oversees medical care and coordinates treatment plans",
+    "MD": "Oversees medical care and coordinates treatment plans",
+    "Social Worker": "Provides emotional support and connects families with resources",
+    "SW": "Provides emotional support and connects families with resources",
+    "Chaplain": "Offers spiritual support and guidance during difficult times",
+    "Occupational Therapist": "Helps with daily activities and adaptive equipment",
+    "OT": "Helps with daily activities and adaptive equipment",
+    "Speech Therapist": "Assists with communication and swallowing difficulties",
+    "ST": "Assists with communication and swallowing difficulties",
+    "Nurse Practitioner": "Provides advanced nursing care and can prescribe medications",
+    "NP": "Provides advanced nursing care and can prescribe medications",
+    "Administrator": "Manages agency operations and coordinates care services",
+  };
+
+  const careTeamMembers: CareTeamMemberForFamily[] = careTeamAssignments.map((assignment: any) => {
+    const member = assignment.care_team_members;
+    const user = users?.find((u: any) => u.id === member?.user_id);
+    
+    const firstName = member?.first_name || "";
+    const lastName = member?.last_name || "";
+    const fullName = `${firstName} ${lastName}`.trim() || user?.full_name || "Unknown";
+    const role = member?.role || "Care Team Member";
+    
+    // Generate initials
+    const nameParts = fullName.split(" ");
+    const initials = nameParts.length >= 2 
+      ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+      : fullName.substring(0, 2).toUpperCase();
+
+    return {
+      id: member?.id || assignment.care_team_member_id,
+      name: fullName,
+      role: role,
+      email: member?.email || null,
+      phone: member?.phone || user?.phone || null,
+      description: roleDescriptions[role] || `Provides ${role.toLowerCase()} services for your loved one`,
+      initials: initials,
+    };
+  });
+
+  return careTeamMembers;
 }

@@ -119,3 +119,38 @@ export async function deleteDelivery(deliveryId: string) {
   revalidatePath("/admin/deliveries");
   revalidatePath("/family/deliveries");
 }
+
+// Get pending/in-transit deliveries count for family member's patient
+export async function getFamilyPendingDeliveriesCount(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+
+    // Get family member's patient_id
+    const { data: familyMember, error: familyError } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    // User might not be a family member (could be admin), return 0 silently
+    if (familyError || !familyMember?.patient_id) return 0;
+
+    // Count pending/in-transit deliveries
+    const { count, error } = await supabase
+      .from("deliveries")
+      .select("*", { count: "exact", head: true })
+      .eq("patient_id", familyMember.patient_id)
+      .in("status", ["pending", "in_transit", "shipped", "out_for_delivery"]);
+
+    if (error) {
+      return 0;
+    }
+
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}

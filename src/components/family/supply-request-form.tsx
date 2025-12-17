@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "../../../supabase/client";
+import { useRouter } from "next/navigation";
 
 const supplyCategories = [
   {
@@ -46,6 +47,7 @@ export default function SupplyRequestForm() {
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const supabase = createClient();
+  const router = useRouter();
 
   const handleQuantityChange = (itemId: string, delta: number) => {
     setSelectedItems((prev) => {
@@ -108,6 +110,9 @@ export default function SupplyRequestForm() {
       // Reset form
       setSelectedItems({});
       setNotes("");
+      
+      // Refresh the page to show the new request card
+      router.refresh();
     } catch (error) {
       console.error("Error submitting request:", error);
       toast({
