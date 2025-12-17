@@ -6,29 +6,40 @@ import crypto from "crypto";
 
 // Helper to get current user's agency_id and role
 async function getUserAgencyAndRole(supabase: any): Promise<{ agencyId: string | null; isSuperAdmin: boolean }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { agencyId: null, isSuperAdmin: false };
-  
-  // Check if user is super_admin
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  
-  const isSuperAdmin = userData?.role === 'super_admin';
-  
-  // Get agency_id from agency_users
-  const { data: agencyUser } = await supabase
-    .from("agency_users")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .single();
-  
-  return { 
-    agencyId: agencyUser?.agency_id || null, 
-    isSuperAdmin 
-  };
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    // Handle auth errors (invalid/expired refresh token)
+    if (authError || !user) {
+      console.warn("Auth error or no user:", authError?.message);
+      return { agencyId: null, isSuperAdmin: false };
+    }
+    
+    // Check if user is super_admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    
+    const isSuperAdmin = userData?.role === 'super_admin';
+    
+    // Get agency_id from agency_users
+    const { data: agencyUser } = await supabase
+      .from("agency_users")
+      .select("agency_id")
+      .eq("user_id", user.id)
+      .single();
+    
+    return { 
+      agencyId: agencyUser?.agency_id || null, 
+      isSuperAdmin 
+    };
+  } catch (error: any) {
+    // Handle refresh token errors gracefully
+    console.warn("Error getting user agency and role:", error?.message);
+    return { agencyId: null, isSuperAdmin: false };
+  }
 }
 
 // Legacy helper for backward compatibility

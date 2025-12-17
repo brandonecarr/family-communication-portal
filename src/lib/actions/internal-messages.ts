@@ -64,43 +64,49 @@ export interface MessageReadReceipt {
 
 // Helper to get current user's agency_id
 async function getUserAgencyId(supabase: any): Promise<string | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return null;
 
-  // First check agency_users (for staff/admin)
-  const { data: agencyUser } = await supabase
-    .from("agency_users")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (agencyUser?.agency_id) {
-    return agencyUser.agency_id;
-  }
-
-  // If not found, check family_members (for family portal users)
-  // Get the patient_id first, then get the patient's agency_id
-  const { data: familyMember } = await supabase
-    .from("family_members")
-    .select("patient_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (familyMember?.patient_id) {
-    const { data: patient } = await supabase
-      .from("patients")
+    // First check agency_users (for staff/admin)
+    const { data: agencyUser } = await supabase
+      .from("agency_users")
       .select("agency_id")
-      .eq("id", familyMember.patient_id)
+      .eq("user_id", user.id)
       .single();
-    
-    if (patient?.agency_id) {
-      return patient.agency_id;
-    }
-  }
 
-  return null;
+    if (agencyUser?.agency_id) {
+      return agencyUser.agency_id;
+    }
+
+    // If not found, check family_members (for family portal users)
+    // Get the patient_id first, then get the patient's agency_id
+    const { data: familyMember } = await supabase
+      .from("family_members")
+      .select("patient_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (familyMember?.patient_id) {
+      const { data: patient } = await supabase
+        .from("patients")
+        .select("agency_id")
+        .eq("id", familyMember.patient_id)
+        .single();
+      
+      if (patient?.agency_id) {
+        return patient.agency_id;
+      }
+    }
+
+    return null;
+  } catch (error: any) {
+    console.warn("Error getting user agency id:", error?.message);
+    return null;
+  }
 }
 
 // Helper to check if user is staff (not family member)
@@ -122,9 +128,10 @@ export async function getMessageThreads(
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) return [];
+  if (authError || !user) return [];
 
   const agencyId = await getUserAgencyId(supabase);
   const isStaff = await isStaffUser(supabase, user.id);
@@ -284,9 +291,10 @@ export async function getThreadWithMessages(threadId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   // Get thread
   const { data: thread, error: threadError } = await supabase
@@ -424,9 +432,10 @@ export async function createMessageThread(data: {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   const agencyId = await getUserAgencyId(supabase);
   if (!agencyId) throw new Error("User not associated with an agency");
@@ -506,9 +515,10 @@ export async function sendThreadMessage(
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   // Verify user is a participant
   const { data: participant } = await supabase
@@ -567,9 +577,10 @@ export async function markMessageAsRead(messageId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   const { error } = await supabase.from("message_read_receipts").upsert(
     {
@@ -590,9 +601,10 @@ export async function markThreadAsRead(threadId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   // Get all unread messages in thread that were NOT sent by the current user
   const { data: messages } = await supabase
@@ -629,9 +641,10 @@ export async function getAvailableRecipients(category: "internal" | "family") {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   const agencyId = await getUserAgencyId(supabase);
   if (!agencyId) return [];
@@ -839,9 +852,10 @@ export async function getPatientCareTeamRecipients(patientId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
   if (!patientId) return [];
 
   try {
@@ -895,9 +909,10 @@ export async function addThreadParticipant(threadId: string, userId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   // Verify current user is admin of thread
   const { data: currentParticipant } = await supabase
@@ -954,9 +969,10 @@ export async function archiveThread(threadId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   // Verify user is admin
   const { data: participant } = await supabase
@@ -986,9 +1002,10 @@ export async function unarchiveThread(threadId: string) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (authError || !user) throw new Error("Not authenticated");
 
   const { error } = await supabase
     .from("message_threads")
@@ -1007,9 +1024,10 @@ export async function getTotalUnreadMessageCount(): Promise<number> {
     const supabase = await createClient();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) return 0;
+    if (authError || !user) return 0;
 
     // Get threads where user is a participant
     const { data: participations, error: partError } = await supabase

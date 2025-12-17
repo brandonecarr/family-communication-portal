@@ -5,29 +5,40 @@ import { revalidatePath } from "next/cache";
 
 // Helper to get current user's agency_id and role
 async function getUserAgencyAndRole(supabase: any): Promise<{ agencyId: string | null; isSuperAdmin: boolean }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { agencyId: null, isSuperAdmin: false };
-  
-  // Check if user is super_admin
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  
-  const isSuperAdmin = userData?.role === 'super_admin';
-  
-  // Get agency_id from agency_users
-  const { data: agencyUser } = await supabase
-    .from("agency_users")
-    .select("agency_id")
-    .eq("user_id", user.id)
-    .single();
-  
-  return { 
-    agencyId: agencyUser?.agency_id || null, 
-    isSuperAdmin 
-  };
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    // Handle auth errors (invalid/expired refresh token)
+    if (authError || !user) {
+      console.warn("Auth error or no user:", authError?.message);
+      return { agencyId: null, isSuperAdmin: false };
+    }
+    
+    // Check if user is super_admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    
+    const isSuperAdmin = userData?.role === 'super_admin';
+    
+    // Get agency_id from agency_users
+    const { data: agencyUser } = await supabase
+      .from("agency_users")
+      .select("agency_id")
+      .eq("user_id", user.id)
+      .single();
+    
+    return { 
+      agencyId: agencyUser?.agency_id || null, 
+      isSuperAdmin 
+    };
+  } catch (error: any) {
+    // Handle refresh token errors gracefully
+    console.warn("Error getting user agency and role:", error?.message);
+    return { agencyId: null, isSuperAdmin: false };
+  }
 }
 
 export async function getDeliveries(patientId?: string) {
@@ -144,8 +155,8 @@ export async function getFamilyPendingDeliveriesCount(): Promise<number> {
   try {
     const supabase = await createClient();
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return 0;
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return 0;
 
     // Get family member's patient_id
     const { data: familyMember, error: familyError } = await supabase

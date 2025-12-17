@@ -124,7 +124,8 @@ export async function createFacility(formData: FormData) {
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
 
     // Get current user for created_by
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+    // Note: authError is ignored here as currentUser is optional for created_by
 
     // Create the facility invite record
     const { error: inviteError } = await supabase
@@ -509,7 +510,8 @@ export async function resendFacilityInvite(facilityId: string) {
   expiresAt.setDate(expiresAt.getDate() + 7);
 
   // Get current user
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+  // Note: authError is ignored here as currentUser is optional
 
   // Check if invite already exists
   const { data: existingInvite } = await supabase
