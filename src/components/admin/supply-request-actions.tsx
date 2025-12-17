@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Package } from "lucide-react";
 import { approveSupplyRequest, rejectSupplyRequest } from "@/lib/actions/supplies";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -175,14 +175,22 @@ export function SupplyRequestActions({
               <span className="font-medium">{patientName}</span>?
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="p-3 bg-[#7A9B8E]/10 rounded-lg">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                Items to be delivered
-              </p>
-              <p className="text-sm capitalize">{itemsList}</p>
+          <div className="py-4 space-y-4">
+            <div className="flex items-center gap-2 text-muted-foreground mb-3">
+              <Package className="h-4 w-4" />
+              <span className="text-sm font-medium">{Object.keys(items).length} items requested:</span>
             </div>
-            <p className="text-sm text-muted-foreground mt-4">
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(items).map(([name, quantity], index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-4 py-2 rounded-full bg-[#D4876F]/20 text-[#D4876F] text-sm font-medium"
+                >
+                  {name} × {quantity}
+                </span>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed pt-2">
               A delivery will be automatically created for these items once approved.
             </p>
           </div>
