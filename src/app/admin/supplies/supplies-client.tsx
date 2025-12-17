@@ -56,9 +56,6 @@ type Patient = {
 
 // Default supply items (fallback if no custom catalog exists)
 const defaultSupplyItems = [
-  // General
-  { id: "medication", name: "Medication", category: "General" },
-  { id: "medical_equipment", name: "Medical Equipment", category: "General" },
   // Personal Care
   { id: "gloves", name: "Disposable Gloves", category: "Personal Care" },
   { id: "wipes", name: "Adult Wipes", category: "Personal Care" },
@@ -119,7 +116,7 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(defaultSupplyItems);
-  const [catalogCategories, setCatalogCategories] = useState<string[]>(["General", "Personal Care", "Medical Supplies", "Comfort Items"]);
+  const [catalogCategories, setCatalogCategories] = useState<string[]>(["Personal Care", "Medical Supplies", "Comfort Items"]);
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -151,19 +148,13 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
         const formattedItems: CatalogItem[] = itemsRes.data.map((item: any) => ({
           id: item.id,
           name: item.name,
-          category: item.supply_categories?.name || "General",
+          category: item.supply_categories?.name || "Uncategorized",
         }));
 
-        // Add general items at the beginning
-        const generalItems: CatalogItem[] = [
-          { id: "medication", name: "Medication", category: "General" },
-          { id: "medical_equipment", name: "Medical Equipment", category: "General" },
-        ];
-
-        setCatalogItems([...generalItems, ...formattedItems]);
+        setCatalogItems(formattedItems);
         
-        // Get unique categories
-        const categories = ["General", ...categoriesRes.data.map((c: any) => c.name)];
+        // Get unique categories from the database only
+        const categories = categoriesRes.data.map((c: any) => c.name);
         setCatalogCategories(categories);
       }
     } catch (error) {
@@ -199,13 +190,27 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
 
   const handleOpenDeliveryDialog = (patientId: string, requestedItems: Record<string, number>, supplyRequestId?: string) => {
     // Convert requested items to array with quantities
-    // Match the item keys to catalog item names
+    // Match the item keys to catalog item names, handling size variants
     const itemsWithQuantities = Object.entries(requestedItems).map(([key, quantity]) => {
-      // Try to find matching catalog item by ID or formatted name
-      const matchingItem = catalogItems.find(item => 
-        item.id === key || 
-        item.name.toLowerCase().replace(/\s+/g, '_') === key.toLowerCase()
-      );
+      // Normalize the key for comparison (e.g., "disposable_gloves_medium" -> "disposable gloves")
+      // Remove size suffixes (small, medium, large, xl, xs, xxl)
+      const normalizedKey = key.toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\s*(small|medium|large|xl|xs|xxl|x-large|x-small)\s*$/i, '')
+        .trim();
+      
+      // Try to find matching catalog item by:
+      // 1. Exact ID match
+      // 2. Exact name match (case-insensitive)
+      // 3. Normalized key matches catalog name (ignoring size suffix)
+      const matchingItem = catalogItems.find(item => {
+        const normalizedItemName = item.name.toLowerCase().trim();
+        return (
+          item.id === key ||
+          normalizedItemName === key.toLowerCase() ||
+          normalizedItemName === normalizedKey
+        );
+      });
       
       return {
         name: matchingItem?.name || key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
