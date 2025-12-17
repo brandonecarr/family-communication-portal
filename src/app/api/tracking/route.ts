@@ -39,6 +39,8 @@ export async function POST(request: Request) {
 
     console.log("Tracking request:", { trackingNumber, carrier, carrierCode, hasApiKey: !!TRACKING_API_KEY });
 
+    let apiErrorMessage: string | null = null;
+
     // Try to fetch from tracking API if we have an API key and tracking number
     if (TRACKING_API_KEY && trackingNumber) {
       try {
@@ -52,14 +54,19 @@ export async function POST(request: Request) {
           }
           return NextResponse.json(apiResult);
         }
+        // Store error message from API result
+        if (apiResult?.error) {
+          apiErrorMessage = apiResult.error;
+        }
       } catch (apiError) {
         console.log("Tracking API failed, using database status:", apiError);
+        apiErrorMessage = apiError instanceof Error ? apiError.message : "API request failed";
       }
-    } else {
-      console.log("Skipping API call - API key present:", !!TRACKING_API_KEY, "Tracking number:", trackingNumber);
+    } else if (!trackingNumber) {
+      console.log("No tracking number could be extracted from URL");
     }
 
-    // Fallback: Use database status but indicate that real-time tracking requires API key
+    // Fallback: Use database status
     let deliveryData = null;
     if (deliveryId) {
       const supabase = await createClient();
@@ -72,11 +79,6 @@ export async function POST(request: Request) {
     }
 
     const trackingInfo = buildTrackingInfoFromDB(trackingUrl, deliveryData, carrier, trackingNumber);
-    
-    // Add note about real-time tracking
-    if (!TRACKING_API_KEY) {
-      trackingInfo.error = "Real-time tracking requires API configuration. Click 'View All Shipping Details' to see live status on the carrier website.";
-    }
     
     return NextResponse.json(trackingInfo);
 
