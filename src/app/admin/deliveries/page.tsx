@@ -1,9 +1,19 @@
 import { redirect } from "next/navigation";
 import { createClient } from "../../../../supabase/server";
-import { Database } from "@/types/supabase";
 import { DeliveryManagementClient } from "@/components/admin/delivery-management-client";
 
-type Delivery = Database["public"]["Tables"]["deliveries"]["Row"] & {
+type Delivery = {
+  id: string;
+  patient_id: string;
+  item_name: string;
+  carrier?: string | null;
+  tracking_number?: string | null;
+  tracking_url?: string | null;
+  status: string;
+  estimated_delivery?: string | null;
+  last_update?: string | null;
+  notes?: string | null;
+  created_at: string;
   patient?: {
     first_name: string;
     last_name: string;
