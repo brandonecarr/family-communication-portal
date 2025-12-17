@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
+import { createClient } from "../../../supabase/client";
 
 interface Patient {
   id: string;
@@ -67,6 +68,7 @@ interface Delivery {
 interface DeliveryManagementClientProps {
   initialDeliveries: Delivery[];
   patients: Patient[];
+  agencyId: string;
 }
 
 const statusColors = {
@@ -87,7 +89,11 @@ const carrierOptions = [
   "Other",
 ];
 
-const supplyItems = [
+// Default supply items (fallback if no custom catalog exists)
+const defaultSupplyItems = [
+  // General
+  { id: "medication", name: "Medication", category: "General" },
+  { id: "medical_equipment", name: "Medical Equipment", category: "General" },
   // Personal Care
   { id: "gloves", name: "Disposable Gloves", category: "Personal Care" },
   { id: "wipes", name: "Adult Wipes", category: "Personal Care" },
@@ -105,9 +111,16 @@ const supplyItems = [
   { id: "blanket", name: "Comfort Blanket", category: "Comfort Items" },
 ];
 
+interface CatalogItem {
+  id: string;
+  name: string;
+  category: string;
+}
+
 export function DeliveryManagementClient({
   initialDeliveries,
   patients,
+  agencyId,
 }: DeliveryManagementClientProps) {
   const [deliveries, setDeliveries] = useState<Delivery[]>(initialDeliveries);
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,7 +132,59 @@ export function DeliveryManagementClient({
   const [isLoading, setIsLoading] = useState(false);
   const [trackingLink, setTrackingLink] = useState("");
   const [newStatus, setNewStatus] = useState<string>("");
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(defaultSupplyItems);
+  const [catalogCategories, setCatalogCategories] = useState<string[]>(["General", "Personal Care", "Medical Supplies", "Comfort Items"]);
   const { toast } = useToast();
+  const supabase = createClient();
+
+  // Fetch supply catalog on mount
+  useEffect(() => {
+    fetchSupplyCatalog();
+  }, [agencyId]);
+
+  const fetchSupplyCatalog = async () => {
+    try {
+      // Fetch categories and items from the agency's catalog
+      const [categoriesRes, itemsRes] = await Promise.all([
+        supabase
+          .from("supply_categories")
+          .select("*")
+          .eq("agency_id", agencyId)
+          .eq("is_active", true)
+          .order("display_order", { ascending: true }),
+        supabase
+          .from("supply_catalog_items")
+          .select("*, supply_categories(name)")
+          .eq("agency_id", agencyId)
+          .eq("is_active", true)
+          .order("display_order", { ascending: true }),
+      ]);
+
+      if (categoriesRes.data && categoriesRes.data.length > 0 && itemsRes.data) {
+        // Format items with category names
+        const formattedItems: CatalogItem[] = itemsRes.data.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          category: item.supply_categories?.name || "General",
+        }));
+
+        // Add general items at the beginning
+        const generalItems: CatalogItem[] = [
+          { id: "medication", name: "Medication", category: "General" },
+          { id: "medical_equipment", name: "Medical Equipment", category: "General" },
+        ];
+
+        setCatalogItems([...generalItems, ...formattedItems]);
+        
+        // Get unique categories
+        const categories = ["General", ...categoriesRes.data.map((c: any) => c.name)];
+        setCatalogCategories(categories);
+      }
+    } catch (error) {
+      console.error("Error fetching supply catalog:", error);
+      // Keep default items on error
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -135,12 +200,6 @@ export function DeliveryManagementClient({
   
   // Multi-select items state
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  
-  const allSelectableItems = [
-    { id: "medication", name: "Medication", category: "General" },
-    { id: "medical_equipment", name: "Medical Equipment", category: "General" },
-    ...supplyItems,
-  ];
   
   const toggleItem = (itemName: string) => {
     setSelectedItems(prev => 
@@ -581,13 +640,14 @@ export function DeliveryManagementClient({
               )}
               <ScrollArea className="h-48 rounded-md border p-3">
                 <div className="space-y-3">
-                  {["General", "Personal Care", "Medical Supplies", "Comfort Items"].map((category) => (
-                    <div key={category}>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
-                      <div className="space-y-2">
-                        {allSelectableItems
-                          .filter((item) => item.category === category)
-                          .map((item) => (
+                  {catalogCategories.map((category) => {
+                    const categoryItems = catalogItems.filter((item) => item.category === category);
+                    if (categoryItems.length === 0) return null;
+                    return (
+                      <div key={category}>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
+                        <div className="space-y-2">
+                          {categoryItems.map((item) => (
                             <div key={item.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`add-${item.id}`}
@@ -602,9 +662,10 @@ export function DeliveryManagementClient({
                               </label>
                             </div>
                           ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -678,13 +739,14 @@ export function DeliveryManagementClient({
               {!selectedDelivery?.supply_request_id && (
                 <ScrollArea className="h-48 rounded-md border p-3">
                   <div className="space-y-3">
-                    {["General", "Personal Care", "Medical Supplies", "Comfort Items"].map((category) => (
-                      <div key={category}>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
-                        <div className="space-y-2">
-                          {allSelectableItems
-                            .filter((item) => item.category === category)
-                            .map((item) => (
+                    {catalogCategories.map((category) => {
+                      const categoryItems = catalogItems.filter((item) => item.category === category);
+                      if (categoryItems.length === 0) return null;
+                      return (
+                        <div key={category}>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
+                          <div className="space-y-2">
+                            {categoryItems.map((item) => (
                               <div key={item.id} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`edit-${item.id}`}
@@ -699,9 +761,10 @@ export function DeliveryManagementClient({
                                 </label>
                               </div>
                             ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               )}

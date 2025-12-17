@@ -181,14 +181,21 @@ export function SupplyRequestActions({
               <span className="text-sm font-medium">{Object.keys(items).length} items requested:</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(items).map(([name, quantity], index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center px-4 py-2 rounded-full bg-[#D4876F]/20 text-[#D4876F] text-sm font-medium"
-                >
-                  {name} × {quantity}
-                </span>
-              ))}
+              {Object.entries(items).map(([name, quantity], index) => {
+                // Format the item name: replace underscores with spaces and capitalize each word
+                const formattedName = name
+                  .split('_')
+                  .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(' ');
+                return (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-4 py-2 rounded-full bg-[#D4876F]/20 text-[#D4876F] text-sm font-medium"
+                  >
+                    {formattedName} × {quantity}
+                  </span>
+                );
+              })}
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed pt-2">
               A delivery will be automatically created for these items once approved.

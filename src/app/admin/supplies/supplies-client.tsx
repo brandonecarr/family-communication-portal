@@ -5,14 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Package, 
   Search, 
   Filter, 
   Clock,
-  User
+  User,
+  Settings,
+  ClipboardList
 } from "lucide-react";
 import { SupplyRequestActions } from "@/components/admin/supply-request-actions";
+import { SupplyCatalogManagement } from "@/components/admin/supply-catalog-management";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +32,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { createClient } from "../../../../supabase/client";
 
 type SupplyRequest = {
   id: string;
@@ -48,7 +53,11 @@ type Patient = {
   last_name: string;
 };
 
-const supplyItems = [
+// Default supply items (fallback if no custom catalog exists)
+const defaultSupplyItems = [
+  // General
+  { id: "medication", name: "Medication", category: "General" },
+  { id: "medical_equipment", name: "Medical Equipment", category: "General" },
   // Personal Care
   { id: "gloves", name: "Disposable Gloves", category: "Personal Care" },
   { id: "wipes", name: "Adult Wipes", category: "Personal Care" },
@@ -66,11 +75,11 @@ const supplyItems = [
   { id: "blanket", name: "Comfort Blanket", category: "Comfort Items" },
 ];
 
-const allSelectableItems = [
-  { id: "medication", name: "Medication", category: "General" },
-  { id: "medical_equipment", name: "Medical Equipment", category: "General" },
-  ...supplyItems,
-];
+interface CatalogItem {
+  id: string;
+  name: string;
+  category: string;
+}
 
 const carrierOptions = [
   "UPS",
@@ -85,6 +94,7 @@ interface SuppliesClientProps {
   requests: SupplyRequest[];
   userName: string;
   patients: Patient[];
+  agencyId: string;
 }
 
 // Helper function to format date consistently
@@ -100,18 +110,66 @@ const formatDate = (dateString: string) => {
   return `${month} ${day}, ${year}, ${hour12}:${minutes} ${ampm}`;
 };
 
-export function SuppliesClient({ requests, userName, patients }: SuppliesClientProps) {
+export function SuppliesClient({ requests, userName, patients, agencyId }: SuppliesClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [selectedItems, setSelectedItems] = useState<{name: string, quantity: number}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(defaultSupplyItems);
+  const [catalogCategories, setCatalogCategories] = useState<string[]>(["General", "Personal Care", "Medical Supplies", "Comfort Items"]);
   const { toast } = useToast();
+  const supabase = createClient();
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    fetchSupplyCatalog();
+  }, [agencyId]);
+
+  const fetchSupplyCatalog = async () => {
+    try {
+      // Fetch categories and items from the agency's catalog
+      const [categoriesRes, itemsRes] = await Promise.all([
+        supabase
+          .from("supply_categories")
+          .select("*")
+          .eq("agency_id", agencyId)
+          .eq("is_active", true)
+          .order("display_order", { ascending: true }),
+        supabase
+          .from("supply_catalog_items")
+          .select("*, supply_categories(name)")
+          .eq("agency_id", agencyId)
+          .eq("is_active", true)
+          .order("display_order", { ascending: true }),
+      ]);
+
+      if (categoriesRes.data && categoriesRes.data.length > 0 && itemsRes.data) {
+        // Format items with category names
+        const formattedItems: CatalogItem[] = itemsRes.data.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          category: item.supply_categories?.name || "General",
+        }));
+
+        // Add general items at the beginning
+        const generalItems: CatalogItem[] = [
+          { id: "medication", name: "Medication", category: "General" },
+          { id: "medical_equipment", name: "Medical Equipment", category: "General" },
+        ];
+
+        setCatalogItems([...generalItems, ...formattedItems]);
+        
+        // Get unique categories
+        const categories = ["General", ...categoriesRes.data.map((c: any) => c.name)];
+        setCatalogCategories(categories);
+      }
+    } catch (error) {
+      console.error("Error fetching supply catalog:", error);
+      // Keep default items on error
+    }
+  };
   
   const [formData, setFormData] = useState({
     patient_id: "",
@@ -228,45 +286,59 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-serif font-semibold text-[#2D2D2D]">
-              Supply Requests
+              Supplies Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage and fulfill family supply requests
+              Manage supply requests and configure your supply catalog
             </p>
           </div>
         </div>
 
-        {/* Filters */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by patient or requester..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tabs */}
+        <Tabs defaultValue="requests" className="space-y-6">
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="requests" className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4" />
+              Supply Requests
+            </TabsTrigger>
+            <TabsTrigger value="catalog" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Catalog Management
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Requests List */}
-        <div className="space-y-4">
+          <TabsContent value="requests" className="space-y-6">
+            {/* Filters */}
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by patient or requester..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Requests List */}
+            <div className="space-y-4">
           {filteredRequests.length === 0 ? (
             <Card className="border-0 shadow-sm">
               <CardContent className="p-12 text-center">
@@ -316,11 +388,17 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                             <span className="font-medium">{itemCount} items requested:</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {Object.entries(items).map(([item, qty]) => (
-                              <Badge key={item} variant="secondary" className="capitalize">
-                                {item.replace(/_/g, " ")} × {qty}
-                              </Badge>
-                            ))}
+                            {Object.entries(items).map(([item, qty]) => {
+                              const formattedName = item
+                                .split('_')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+                              return (
+                                <Badge key={item} variant="secondary">
+                                  {formattedName} × {qty}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -364,7 +442,13 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
               );
             })
           )}
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="catalog">
+            <SupplyCatalogManagement agencyId={agencyId} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Add Delivery Dialog */}
@@ -423,13 +507,14 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
               )}
               <ScrollArea className="h-48 rounded-md border p-3">
                 <div className="space-y-3">
-                  {["General", "Personal Care", "Medical Supplies", "Comfort Items"].map((category) => (
-                    <div key={category}>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
-                      <div className="space-y-2">
-                        {allSelectableItems
-                          .filter((item) => item.category === category)
-                          .map((item) => (
+                  {catalogCategories.map((category) => {
+                    const categoryItems = catalogItems.filter((item) => item.category === category);
+                    if (categoryItems.length === 0) return null;
+                    return (
+                      <div key={category}>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">{category}</p>
+                        <div className="space-y-2">
+                          {categoryItems.map((item) => (
                             <div key={item.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`add-${item.id}`}
@@ -444,9 +529,10 @@ export function SuppliesClient({ requests, userName, patients }: SuppliesClientP
                               </label>
                             </div>
                           ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>

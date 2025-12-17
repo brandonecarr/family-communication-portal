@@ -132,5 +132,5 @@ export default async function AdminSuppliesPage() {
     }
   }
 
-  return <SuppliesClient requests={requests} userName={userName} patients={patients} />;
+  return <SuppliesClient requests={requests} userName={userName} patients={patients} agencyId={agencyId || ""} />;
 }

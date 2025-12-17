@@ -211,12 +211,18 @@ export default function SupplyRequestCards() {
                           <div className="border-t pt-4">
                             <h4 className="text-sm font-semibold mb-3">Requested Items</h4>
                             <div className="space-y-2">
-                              {Object.entries(items).map(([itemId, quantity]) => (
-                                <div key={itemId} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">
-                                  <span className="text-sm">{supplyItemNames[itemId] || itemId.replace(/_/g, " ")}</span>
-                                  <span className="text-sm font-medium">×{quantity}</span>
-                                </div>
-                              ))}
+                              {Object.entries(items).map(([itemId, quantity]) => {
+                                const formattedName = supplyItemNames[itemId] || itemId
+                                  .split('_')
+                                  .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                  .join(' ');
+                                return (
+                                  <div key={itemId} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">
+                                    <span className="text-sm">{formattedName}</span>
+                                    <span className="text-sm font-medium">×{quantity}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                           {request.notes && (

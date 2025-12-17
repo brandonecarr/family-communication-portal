@@ -85,5 +85,5 @@ export default async function AdminDeliveriesPage() {
     }
   }
 
-  return <DeliveryManagementClient initialDeliveries={deliveries} patients={patients} />;
+  return <DeliveryManagementClient initialDeliveries={deliveries} patients={patients} agencyId={agencyId || ""} />;
 }
