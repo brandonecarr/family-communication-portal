@@ -66,9 +66,9 @@ export default function DeliveryTracker() {
   }, []);
 
   const fetchDeliveries = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
       setLoading(false);
       return;
     }

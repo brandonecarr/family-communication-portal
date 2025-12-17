@@ -67,10 +67,10 @@ export default function FacilitySetupPage() {
       setInitialLoading(true);
       
       // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
       setUser(currentUser);
 
-      if (!currentUser) {
+      if (authError || !currentUser) {
         // User not logged in, redirect to sign-in
         router.push("/sign-in");
         return;

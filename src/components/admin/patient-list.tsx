@@ -35,6 +35,7 @@ import { createClient } from "../../../supabase/client";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
 import { createPatient } from "@/lib/actions/patients";
+import { getClientAgencyId } from "@/lib/client-auth";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -66,6 +67,7 @@ export default function PatientList() {
   const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 20;
   const [newPatient, setNewPatient] = useState({
     first_name: "",
@@ -103,7 +105,22 @@ export default function PatientList() {
   };
 
   useEffect(() => {
-    fetchPatients();
+    // Get agency ID first
+    const init = async () => {
+      const id = await getClientAgencyId();
+      setAgencyId(id);
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    // Only fetch when we have agency ID
+    if (agencyId) {
+      fetchPatients();
+    } else if (agencyId === null) {
+      // If explicitly null (not undefined), user has no agency - show no data
+      setLoading(false);
+    }
 
     // Subscribe to real-time updates
     const channel = supabase
@@ -116,7 +133,7 @@ export default function PatientList() {
           table: "patients",
         },
         () => {
-          fetchPatients();
+          if (agencyId) fetchPatients();
         }
       )
       .subscribe();
@@ -124,15 +141,24 @@ export default function PatientList() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [showArchived, currentPage]);
+  }, [showArchived, currentPage, agencyId]);
 
   const fetchPatients = async () => {
+    // CRITICAL: Always filter by agency_id for data isolation
+    if (!agencyId) {
+      setPatients([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
     let query = supabase
       .from("patients")
       .select("*", { count: "exact" })
+      .eq("agency_id", agencyId) // CRITICAL: Filter by agency
       .order("created_at", { ascending: false })
       .range(from, to);
 

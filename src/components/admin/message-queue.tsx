@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "../../../supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { getClientAgencyId } from "@/lib/client-auth";
 
 interface ThreadMessage {
   id: string;
@@ -46,6 +47,7 @@ export default function MessageQueue() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const { toast } = useToast();
   const supabase = createClient();
   const retryCount = useRef(0);
@@ -68,6 +70,16 @@ export default function MessageQueue() {
       
       setCurrentUserId(user.id);
 
+      // CRITICAL: Get agency ID for filtering
+      const currentAgencyId = await getClientAgencyId();
+      if (!currentAgencyId) {
+        // No agency - show no threads
+        setThreads([]);
+        setLoading(false);
+        return;
+      }
+      setAgencyId(currentAgencyId);
+
       // Get threads where user is a participant
       const { data: participantThreads, error: threadsError } = await supabase
         .from("thread_participants")
@@ -88,7 +100,7 @@ export default function MessageQueue() {
 
       const threadIds = participantThreads.map(pt => pt.thread_id);
 
-      // Get thread details with last message
+      // Get thread details with last message - CRITICAL: Filter by agency
       const { data: threadsData, error: detailsError } = await supabase
         .from("message_threads")
         .select(`
@@ -98,9 +110,11 @@ export default function MessageQueue() {
           last_message_at,
           created_at,
           is_group,
-          archived_at
+          archived_at,
+          agency_id
         `)
         .in("id", threadIds)
+        .eq("agency_id", currentAgencyId) // CRITICAL: Filter by agency
         .is("archived_at", null)
         .order("last_message_at", { ascending: false })
         .limit(5);

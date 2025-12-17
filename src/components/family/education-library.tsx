@@ -37,9 +37,9 @@ export default function EducationLibrary() {
 
   const fetchModulesAndProgress = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
       
-      if (!user) return;
+      if (authError || !user) return;
 
       // Fetch modules
       const { data: modulesData } = await supabase
@@ -73,9 +73,9 @@ export default function EducationLibrary() {
 
   const handleModuleClick = async (moduleId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
       
-      if (!user) return;
+      if (authError || !user) return;
 
       const currentProgress = progress[moduleId]?.progress || 0;
 
@@ -110,9 +110,9 @@ export default function EducationLibrary() {
     e.stopPropagation();
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
       
-      if (!user) return;
+      if (authError || !user) return;
 
       const { error } = await supabase.from("module_progress").upsert({
         user_id: user.id,

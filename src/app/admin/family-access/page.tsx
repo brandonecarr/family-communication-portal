@@ -61,9 +61,11 @@ export default async function AdminFamilyAccessPage({
   
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  // Handle auth errors (including refresh token issues)
+  if (error || !user) {
     return redirect("/sign-in");
   }
 

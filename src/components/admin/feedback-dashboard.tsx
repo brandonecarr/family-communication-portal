@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "../../../supabase/client";
 import { formatDistanceToNow } from "date-fns";
+import { getClientAgencyId } from "@/lib/client-auth";
 
 interface Feedback {
   id: string;
@@ -41,11 +42,25 @@ export default function FeedbackDashboard() {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const { toast } = useToast();
   const supabase = createClient();
 
   useEffect(() => {
-    fetchFeedback();
+    // Get agency ID first
+    const init = async () => {
+      const id = await getClientAgencyId();
+      setAgencyId(id);
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (agencyId) {
+      fetchFeedback();
+    } else if (agencyId === null) {
+      setLoading(false);
+    }
 
     // Subscribe to real-time updates
     const channel = supabase
@@ -58,7 +73,7 @@ export default function FeedbackDashboard() {
           table: "visit_feedback",
         },
         () => {
-          fetchFeedback();
+          if (agencyId) fetchFeedback();
         }
       )
       .subscribe();
@@ -66,9 +81,44 @@ export default function FeedbackDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [ratingFilter, statusFilter]);
+  }, [ratingFilter, statusFilter, agencyId]);
 
   const fetchFeedback = async () => {
+    // CRITICAL: Filter by agency's patients for data isolation
+    if (!agencyId) {
+      setFeedback([]);
+      setLoading(false);
+      return;
+    }
+
+    // First get all patient IDs for this agency
+    const { data: agencyPatients } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("agency_id", agencyId);
+    
+    const patientIds = agencyPatients?.map(p => p.id) || [];
+    
+    if (patientIds.length === 0) {
+      setFeedback([]);
+      setLoading(false);
+      return;
+    }
+
+    // Get visits for these patients
+    const { data: agencyVisits } = await supabase
+      .from("visits")
+      .select("id")
+      .in("patient_id", patientIds);
+    
+    const visitIds = agencyVisits?.map(v => v.id) || [];
+    
+    if (visitIds.length === 0) {
+      setFeedback([]);
+      setLoading(false);
+      return;
+    }
+
     let query = supabase
       .from("visit_feedback")
       .select(`
@@ -84,6 +134,7 @@ export default function FeedbackDashboard() {
           )
         )
       `)
+      .in("visit_id", visitIds) // CRITICAL: Filter by agency's visits
       .order("created_at", { ascending: false });
 
     // Apply rating filter

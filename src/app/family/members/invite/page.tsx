@@ -48,8 +48,8 @@ export default function InviteMemberPage() {
   useEffect(() => {
     const checkPermission = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
           router.push("/sign-in");
           return;
         }
@@ -79,9 +79,9 @@ export default function InviteMemberPage() {
     setSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
       
-      if (!user) {
+      if (authError || !user) {
         router.push("/sign-in");
         return;
       }

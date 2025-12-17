@@ -118,9 +118,9 @@ function AdminSetupContent() {
       
       setLoading(true);
       
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
       
-      if (!currentUser) {
+      if (authError || !currentUser) {
         // If we had an auth code but no user, the link may have expired
         if (authCode) {
           setError("Your invitation link has expired or is invalid. Please request a new invitation.");

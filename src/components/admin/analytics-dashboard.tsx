@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "../../../supabase/client";
+import { getClientAgencyId } from "@/lib/client-auth";
 
 interface Metric {
   label: string;
@@ -25,42 +26,90 @@ export default function AnalyticsDashboard() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [timePeriod, setTimePeriod] = useState("30");
   const [loading, setLoading] = useState(true);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
-    fetchAnalytics();
-  }, [timePeriod]);
+    // Get agency ID first
+    const init = async () => {
+      const id = await getClientAgencyId();
+      setAgencyId(id);
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (agencyId) {
+      fetchAnalytics();
+    } else if (agencyId === null) {
+      setLoading(false);
+    }
+  }, [timePeriod, agencyId]);
 
   const fetchAnalytics = async () => {
+    // CRITICAL: Filter by agency for data isolation
+    if (!agencyId) {
+      setMetrics([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Fetch active patients
-      const { count: activePatients } = await supabase
+      // First get all patient IDs for this agency
+      const { data: agencyPatients } = await supabase
         .from("patients")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active");
+        .select("id")
+        .eq("agency_id", agencyId);
+      
+      const patientIds = agencyPatients?.map(p => p.id) || [];
 
-      // Fetch visit completion rate
-      const { count: totalVisits } = await supabase
-        .from("visits")
-        .select("*", { count: "exact", head: true });
+      // Fetch active patients for THIS agency
+      const { data: activePatientsData } = await supabase
+        .from("patients")
+        .select("id")
+        .eq("status", "active")
+        .eq("agency_id", agencyId);
+      const activePatients = activePatientsData?.length || 0;
 
-      const { count: completedVisits } = await supabase
-        .from("visits")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "completed");
+      // Fetch visit counts for THIS agency's patients
+      let totalVisits = 0;
+      let completedVisits = 0;
+      if (patientIds.length > 0) {
+        const { data: visitsData } = await supabase
+          .from("visits")
+          .select("id, status")
+          .in("patient_id", patientIds);
+        
+        totalVisits = visitsData?.length || 0;
+        completedVisits = visitsData?.filter(v => v.status === "completed").length || 0;
+      }
 
       const completionRate = totalVisits
-        ? ((completedVisits! / totalVisits) * 100).toFixed(1)
+        ? ((completedVisits / totalVisits) * 100).toFixed(1)
         : "0";
 
-      // Fetch average satisfaction
-      const { data: feedbackData } = await supabase
-        .from("visit_feedback")
-        .select("rating");
-
-      const avgSatisfaction = feedbackData?.length
-        ? (feedbackData.reduce((sum, f) => sum + f.rating, 0) / feedbackData.length).toFixed(1)
-        : "N/A";
+      // Fetch average satisfaction for THIS agency's visits
+      let avgSatisfaction: string = "N/A";
+      if (patientIds.length > 0) {
+        // Get visits for these patients
+        const { data: agencyVisits } = await supabase
+          .from("visits")
+          .select("id")
+          .in("patient_id", patientIds);
+        
+        const visitIds = agencyVisits?.map(v => v.id) || [];
+        
+        if (visitIds.length > 0) {
+          const { data: feedbackData } = await supabase
+            .from("visit_feedback")
+            .select("rating")
+            .in("visit_id", visitIds);
+          
+          avgSatisfaction = feedbackData?.length
+            ? (feedbackData.reduce((sum, f) => sum + f.rating, 0) / feedbackData.length).toFixed(1)
+            : "N/A";
+        }
+      }
 
       setMetrics([
         {

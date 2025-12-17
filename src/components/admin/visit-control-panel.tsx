@@ -16,6 +16,7 @@ import {
 import { createClient } from "../../../supabase/client";
 import { EditVisitDialog } from "./edit-visit-dialog";
 import { DeleteVisitDialog } from "./delete-visit-dialog";
+import { getClientAgencyId } from "@/lib/client-auth";
 
 interface Visit {
   id: string;
@@ -48,11 +49,25 @@ export default function VisitControlPanel() {
   const [dateFilter, setDateFilter] = useState("today");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const { toast } = useToast();
   const supabase = createClient();
 
   useEffect(() => {
-    fetchVisits();
+    // Get agency ID first
+    const init = async () => {
+      const id = await getClientAgencyId();
+      setAgencyId(id);
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (agencyId) {
+      fetchVisits();
+    } else if (agencyId === null) {
+      setLoading(false);
+    }
 
     // Subscribe to real-time updates
     const channel = supabase
@@ -65,7 +80,7 @@ export default function VisitControlPanel() {
           table: "visits",
         },
         () => {
-          fetchVisits();
+          if (agencyId) fetchVisits();
         }
       )
       .subscribe();
@@ -73,9 +88,30 @@ export default function VisitControlPanel() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [dateFilter, statusFilter]);
+  }, [dateFilter, statusFilter, agencyId]);
 
   const fetchVisits = async () => {
+    // CRITICAL: Filter by agency's patients for data isolation
+    if (!agencyId) {
+      setVisits([]);
+      setLoading(false);
+      return;
+    }
+
+    // First get all patient IDs for this agency
+    const { data: agencyPatients } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("agency_id", agencyId);
+    
+    const patientIds = agencyPatients?.map(p => p.id) || [];
+    
+    if (patientIds.length === 0) {
+      setVisits([]);
+      setLoading(false);
+      return;
+    }
+
     let query = supabase
       .from("visits")
       .select(`
@@ -87,6 +123,7 @@ export default function VisitControlPanel() {
           name
         )
       `)
+      .in("patient_id", patientIds) // CRITICAL: Filter by agency's patients
       .order("date", { ascending: true });
 
     // Apply date filter
