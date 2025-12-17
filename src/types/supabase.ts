@@ -1443,7 +1443,12 @@ export type Database = {
         | "deceased"
         | "archived"
         | "inactive"
-      supply_request_status: "pending" | "approved" | "fulfilled" | "cancelled"
+      supply_request_status:
+        | "pending"
+        | "approved"
+        | "fulfilled"
+        | "cancelled"
+        | "archived"
       user_role:
         | "family_admin"
         | "family_member"
@@ -1602,7 +1607,13 @@ export const Constants = {
         "archived",
         "inactive",
       ],
-      supply_request_status: ["pending", "approved", "fulfilled", "cancelled"],
+      supply_request_status: [
+        "pending",
+        "approved",
+        "fulfilled",
+        "cancelled",
+        "archived",
+      ],
       user_role: [
         "family_admin",
         "family_member",

@@ -249,7 +249,44 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
     setIsLoading(true);
     try {
       const itemName = selectedItems.map(i => `${i.name} (${i.quantity})`).join(", ");
-      const deliveryData = { ...formData, item_name: itemName };
+      
+      // Validate patient_id is set
+      if (!formData.patient_id || formData.patient_id.trim() === '') {
+        throw new Error("Patient ID is required");
+      }
+      
+      // Clean up empty strings - convert them to undefined (which will be excluded from JSON)
+      const deliveryData: Record<string, any> = {
+        patient_id: formData.patient_id,
+        item_name: itemName,
+        status: formData.status || "ordered",
+      };
+      
+      // Only add optional fields if they have actual values
+      if (formData.carrier && formData.carrier.trim() !== '') {
+        deliveryData.carrier = formData.carrier.trim();
+      }
+      if (formData.tracking_number && formData.tracking_number.trim() !== '') {
+        deliveryData.tracking_number = formData.tracking_number.trim();
+      }
+      if (formData.tracking_url && formData.tracking_url.trim() !== '') {
+        deliveryData.tracking_url = formData.tracking_url.trim();
+      }
+      if (formData.estimated_delivery && formData.estimated_delivery.trim() !== '') {
+        deliveryData.estimated_delivery = formData.estimated_delivery.trim();
+      }
+      if (formData.notes && formData.notes.trim() !== '') {
+        deliveryData.notes = formData.notes.trim();
+      }
+      // Only include supply_request_id if it's a valid UUID
+      if (formData.supply_request_id && typeof formData.supply_request_id === 'string' && formData.supply_request_id.trim() !== '') {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(formData.supply_request_id)) {
+          deliveryData.supply_request_id = formData.supply_request_id;
+        }
+      }
+      
+      console.log("Sending delivery data:", JSON.stringify(deliveryData, null, 2));
       
       const response = await fetch("/api/deliveries", {
         method: "POST",
@@ -257,11 +294,44 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
         body: JSON.stringify(deliveryData),
       });
 
-      if (!response.ok) throw new Error("Failed to create delivery");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Delivery creation failed:", JSON.stringify(errorData, null, 2));
+        console.error("Sent data was:", JSON.stringify(deliveryData, null, 2));
+        throw new Error(`${errorData.error || "Failed to create delivery"}${errorData.code ? ` (${errorData.code})` : ''}${errorData.details ? `: ${errorData.details}` : ''}`);
+      }
 
-      // Auto-archive the supply request if it exists
-      if (formData.supply_request_id) {
-        await archiveSupplyRequest(formData.supply_request_id);
+      // Auto-archive the supply request if it exists and is a valid UUID
+      console.log("Checking supply_request_id for archiving:", {
+        value: formData.supply_request_id,
+        type: typeof formData.supply_request_id,
+        isString: typeof formData.supply_request_id === 'string',
+      });
+      
+      if (formData.supply_request_id && typeof formData.supply_request_id === 'string' && formData.supply_request_id.trim() !== '') {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const isValidUuid = uuidRegex.test(formData.supply_request_id);
+        console.log("UUID validation result:", isValidUuid, "for value:", formData.supply_request_id);
+        
+        if (isValidUuid) {
+          try {
+            console.log("Calling archiveSupplyRequest with:", formData.supply_request_id);
+            const archiveResult = await archiveSupplyRequest(formData.supply_request_id);
+            if (archiveResult.error) {
+              console.error("Archive returned error:", archiveResult.error, "code:", archiveResult.code);
+            } else {
+              console.log("Archive successful:", archiveResult.data);
+            }
+          } catch (archiveError: any) {
+            console.error("Failed to archive supply request:", archiveError);
+            console.error("Archive error details:", {
+              code: archiveError?.code,
+              message: archiveError?.message,
+              details: archiveError?.details,
+            });
+            // Don't fail the whole operation if archiving fails
+          }
+        }
       }
 
       setShowDeliveryDialog(false);
@@ -282,9 +352,10 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
         description: "The delivery has been successfully created and the request has been archived.",
       });
     } catch (error) {
+      console.error("Error creating delivery:", error);
       toast({
         title: "Error",
-        description: "Failed to create delivery. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create delivery. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -295,11 +366,19 @@ export function SuppliesClient({ requests, userName, patients, agencyId }: Suppl
   const handleArchiveRequest = async (requestId: string) => {
     setIsArchiving(requestId);
     try {
-      await archiveSupplyRequest(requestId);
-      toast({
-        title: "Request Archived",
-        description: "The supply request has been archived successfully.",
-      });
+      const result = await archiveSupplyRequest(requestId);
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Request Archived",
+          description: "The supply request has been archived successfully.",
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",

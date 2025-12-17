@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/../supabase/server";
+import { createClient } from "../../../../supabase/server";
 
 export interface TrackingEvent {
   status: string;

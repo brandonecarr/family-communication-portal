@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/../supabase/server";
+import { createClient } from "../../../../../supabase/server";
 
 // 17track webhook endpoint
 // Register this URL in your 17track dashboard: https://verawaycare.com/api/webhooks/17track

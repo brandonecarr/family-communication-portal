@@ -154,7 +154,19 @@ export async function deleteSupplyRequest(requestId: string) {
 }
 
 export async function archiveSupplyRequest(requestId: string) {
+  console.log("archiveSupplyRequest called with:", requestId, "type:", typeof requestId);
+  
+  // Validate that requestId is a valid UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  
+  if (!requestId || typeof requestId !== 'string' || requestId.trim() === '' || !uuidRegex.test(requestId)) {
+    console.error("archiveSupplyRequest: Invalid requestId:", requestId, "type:", typeof requestId);
+    return { error: "Invalid supply request ID format", data: null };
+  }
+  
   const supabase = await createClient();
+  
+  console.log("archiveSupplyRequest: Executing update for requestId:", requestId);
   
   const { data, error } = await supabase
     .from("supply_requests")
@@ -166,13 +178,18 @@ export async function archiveSupplyRequest(requestId: string) {
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    console.error("archiveSupplyRequest: Database error:", error);
+    return { error: error.message, code: error.code, data: null };
+  }
+  
+  console.log("archiveSupplyRequest: Success, data:", data);
   
   revalidatePath("/admin/supplies");
   revalidatePath("/family/supplies");
   revalidatePath("/family/deliveries");
   
-  return data;
+  return { data, error: null };
 }
 
 export interface FamilySupplyRequest {
