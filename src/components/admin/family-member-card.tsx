@@ -32,7 +32,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Loader2, CheckCircle, Phone, Mail, Send } from "lucide-react";
+import { Pencil, Trash2, Loader2, CheckCircle, Phone, Mail, Send, MessageSquare } from "lucide-react";
+import Link from "next/link";
 import { updateFamilyMember, deleteFamilyMember, resendFamilyInvitation } from "@/lib/actions/patients";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -180,6 +181,14 @@ export function FamilyMemberCard({
         <Badge className="bg-[#7A9B8E] hover:bg-[#7A9B8E]/90 text-white px-4 py-1.5">
           {formatRole(member.role)}
         </Badge>
+        
+        {/* Send Message Button */}
+        <Link href={`/admin/messages?family_member=${member.id}`}>
+          <Button variant="outline" size="sm" className="h-9 gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Send Message
+          </Button>
+        </Link>
         
         {/* Resend Invite Button - only show for pending invites */}
         {isPendingInvite && (

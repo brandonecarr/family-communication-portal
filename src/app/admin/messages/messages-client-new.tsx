@@ -80,6 +80,7 @@ export default function MessagesClientNew({
   initialThreadMessages = {},
 }: MessagesClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const supabase = createClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -153,6 +154,16 @@ export default function MessagesClientNew({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Check for family_member parameter and auto-open dialog
+  useEffect(() => {
+    const familyMemberId = searchParams.get("family_member");
+    if (familyMemberId && !createDialogOpen) {
+      // Set to family tab and open dialog with pre-selected family member
+      setActiveTab("family");
+      handleOpenCreateDialogWithFamilyMember(familyMemberId);
+    }
+  }, [searchParams]);
 
   // Real-time subscription for new messages and read receipts
   useEffect(() => {
@@ -327,6 +338,36 @@ export default function MessagesClientNew({
       setSelectedRecipients([]);
       setInitialMessage("");
       setCreateDialogOpen(true);
+    } catch (error) {
+      console.error("Error loading recipients:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load recipients",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenCreateDialogWithFamilyMember = async (familyMemberId: string) => {
+    try {
+      const recipients = await getAvailableRecipients("family");
+      setAvailableRecipients(recipients);
+      
+      // Find the family member in recipients
+      const familyMember = recipients.find((r: any) => r.id === familyMemberId);
+      
+      if (familyMember) {
+        // Set the patient filter to show this family member
+        setSelectedPatientFilter(familyMember.patient_id);
+        setSelectedRecipients([familyMemberId]);
+      }
+      
+      setRecipientSearchQuery("");
+      setInitialMessage("");
+      setCreateDialogOpen(true);
+      
+      // Clear the URL parameter
+      router.replace("/admin/messages");
     } catch (error) {
       console.error("Error loading recipients:", error);
       toast({

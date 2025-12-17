@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import DatePicker from "react-datepicker";
@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Loader2, CheckCircle, Plus } from "lucide-react";
 import { createVisit } from "@/lib/actions/visits";
+import { getTeamMembers, type TeamMember } from "@/lib/actions/team-management";
 
 export function CreateVisitDialog({ patientId }: { patientId: string }) {
   const router = useRouter();
@@ -33,7 +34,25 @@ export function CreateVisitDialog({ patientId }: { patientId: string }) {
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [discipline, setDiscipline] = useState<string>("");
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  const [staffMembers, setStaffMembers] = useState<TeamMember[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+
+  // Load staff members when dialog opens
+  useEffect(() => {
+    if (open) {
+      setLoadingStaff(true);
+      getTeamMembers()
+        .then((members) => {
+          setStaffMembers(members);
+          setLoadingStaff(false);
+        })
+        .catch((err) => {
+          console.error("Error loading staff members:", err);
+          setLoadingStaff(false);
+        });
+    }
+  }, [open]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,16 +64,22 @@ export function CreateVisitDialog({ patientId }: { patientId: string }) {
       return;
     }
 
-    if (!discipline) {
-      setError("Please select a discipline");
+    if (!selectedStaffId) {
+      setError("Please select a staff member");
+      return;
+    }
+
+    const selectedStaff = staffMembers.find(s => s.id === selectedStaffId);
+    if (!selectedStaff) {
+      setError("Invalid staff member selected");
       return;
     }
 
     const formData = new FormData(e.currentTarget);
     const visitData = {
       patient_id: patientId,
-      staff_name: formData.get("staff_name") as string,
-      discipline: discipline,
+      staff_name: selectedStaff.name,
+      discipline: selectedStaff.jobRole || "Staff",
       scheduled_date: format(selectedDate, "yyyy-MM-dd"),
       scheduled_time: formData.get("scheduled_time") as string,
       notes: formData.get("notes") as string || undefined,
@@ -69,7 +94,7 @@ export function CreateVisitDialog({ patientId }: { patientId: string }) {
           setOpen(false);
           setSuccess(false);
           setSelectedDate(null);
-          setDiscipline("");
+          setSelectedStaffId("");
         }, 1500);
       } catch (err: any) {
         setError(err?.message || "Failed to create visit");
@@ -103,28 +128,17 @@ export function CreateVisitDialog({ patientId }: { patientId: string }) {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="staff_name">Staff Name *</Label>
-              <Input
-                id="staff_name"
-                name="staff_name"
-                placeholder="Enter staff name"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="discipline">Discipline *</Label>
-              <Select value={discipline} onValueChange={setDiscipline}>
+              <Label htmlFor="staff_member">Staff Member *</Label>
+              <Select value={selectedStaffId} onValueChange={setSelectedStaffId} disabled={loadingStaff}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select discipline" />
+                  <SelectValue placeholder={loadingStaff ? "Loading staff..." : "Select staff member"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Nursing">Nursing</SelectItem>
-                  <SelectItem value="Aide">Aide</SelectItem>
-                  <SelectItem value="Social Work">Social Work</SelectItem>
-                  <SelectItem value="Chaplain">Chaplain</SelectItem>
-                  <SelectItem value="Physician">Physician</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {staffMembers.map((staff) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.name} {staff.jobRole ? `(${staff.jobRole})` : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

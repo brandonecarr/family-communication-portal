@@ -105,52 +105,31 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
       .eq("user_id", user.id)
       .single();
 
-    console.log("[getTeamMembers] Current user agency:", {
-      userId: user.id,
-      agencyId: currentUserAgency?.agency_id,
-      error: agencyError?.message,
-    });
-
     agencyId = currentUserAgency?.agency_id;
   }
 
   if (!agencyId) {
-    console.error("[getTeamMembers] No agency ID found for user");
     return [];
   }
 
-  console.log("[getTeamMembers] Fetching team members for agency:", agencyId);
-
-  // Fetch all team members for this agency
+  // Fetch all team members for this agency (include job_role)
   const { data: agencyUsers, error: agencyUsersError } = await serviceClient
     .from("agency_users")
-    .select("user_id, role, created_at")
+    .select("user_id, role, job_role, created_at")
     .eq("agency_id", agencyId)
     .order("created_at", { ascending: false });
-
-  console.log("[getTeamMembers] Agency users query:", {
-    agencyId,
-    count: agencyUsers?.length || 0,
-    error: agencyUsersError?.message,
-  });
 
   // Get user details for all team members
   const userIds = (agencyUsers || []).map((au: any) => au.user_id);
   if (userIds.length === 0) {
-    console.log("[getTeamMembers] No user IDs found");
     return [];
   }
 
+  // Query users without last_sign_in_at (doesn't exist in public.users table)
   const { data: users, error: usersError } = await serviceClient
     .from("users")
-    .select("id, full_name, name, email, avatar_url, last_sign_in_at")
+    .select("id, full_name, name, email, avatar_url")
     .in("id", userIds);
-
-  console.log("[getTeamMembers] Users query:", {
-    userIdsCount: userIds.length,
-    usersCount: users?.length || 0,
-    error: usersError?.message,
-  });
 
   if (!users) return [];
 
@@ -165,7 +144,7 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
       role: au.role,
       jobRole: au.job_role || null,
       status: "Active",
-      lastLogin: userData.last_sign_in_at || null,
+      lastLogin: null, // last_sign_in_at is not available in public.users
       joinDate: au.created_at,
       avatar_url: userData.avatar_url,
     };

@@ -163,10 +163,7 @@ export default async function PatientDetailsPage({
             <Package className="h-4 w-4 mr-2" />
             Deliveries ({deliveries.length})
           </TabsTrigger>
-          <TabsTrigger value="messages">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Messages ({messages.length})
-          </TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="visits" className="space-y-4">
@@ -181,54 +178,50 @@ export default async function PatientDetailsPage({
               ) : (
                 <div className="space-y-3">
                   {visits.map((visit: any) => (
-                    <Card key={visit.id} className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-semibold text-base">{visit.discipline}</h3>
-                              {visit.staff_name && (
-                                <Badge variant="outline" className="text-xs font-normal">
-                                  {visit.staff_name}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1.5">
-                                <Calendar className="h-4 w-4" />
-                                {new Date(visit.scheduled_date).toLocaleDateString()}
-                              </span>
-                              {visit.scheduled_time && (
-                                <span className="flex items-center gap-1.5">
-                                  <Clock className="h-4 w-4" />
-                                  {visit.scheduled_time}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge className="bg-[#7A9B8E] hover:bg-[#7A9B8E]/90 text-white px-4 py-1.5 capitalize">
-                              {visit.status.replace('_', ' ')}
+                    <div key={visit.id} className="flex items-center justify-between p-6 border rounded-lg bg-white">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-base">{visit.discipline}</h3>
+                          {visit.staff_name && (
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {visit.staff_name}
                             </Badge>
-                            <EditVisitDialog visit={{
-                              id: visit.id,
-                              staff_name: visit.staff_name || "",
-                              discipline: visit.discipline,
-                              scheduled_date: visit.scheduled_date,
-                              scheduled_time: visit.scheduled_time,
-                              notes: visit.notes,
-                              status: visit.status
-                            }} />
-                            <DeleteVisitDialog visit={{
-                              id: visit.id,
-                              staff_name: visit.staff_name || "",
-                              discipline: visit.discipline,
-                              scheduled_date: visit.scheduled_date
-                            }} />
-                          </div>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="h-4 w-4" />
+                            {new Date(visit.scheduled_date).toLocaleDateString()}
+                          </span>
+                          {visit.scheduled_time && (
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="h-4 w-4" />
+                              {visit.scheduled_time}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-[#7A9B8E] hover:bg-[#7A9B8E]/90 text-white px-4 py-1.5 capitalize">
+                          {visit.status.replace('_', ' ')}
+                        </Badge>
+                        <EditVisitDialog visit={{
+                          id: visit.id,
+                          staff_name: visit.staff_name || "",
+                          discipline: visit.discipline,
+                          scheduled_date: visit.scheduled_date,
+                          scheduled_time: visit.scheduled_time,
+                          notes: visit.notes,
+                          status: visit.status
+                        }} />
+                        <DeleteVisitDialog visit={{
+                          id: visit.id,
+                          staff_name: visit.staff_name || "",
+                          discipline: visit.discipline,
+                          scheduled_date: visit.scheduled_date
+                        }} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -298,66 +291,7 @@ export default async function PatientDetailsPage({
           </Card>
         </TabsContent>
 
-        <TabsContent value="messages" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Messages</CardTitle>
-              <Link href={`/admin/messages?patient=${params.id}`}>
-                <Button variant="outline" size="sm" className="rounded-full gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Open Messages
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent>
-              {messages.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  No messages found for this patient
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {messages.map((message: any) => {
-                    const isStaff = message.sender_type === "staff";
-                    return (
-                      <div 
-                        key={message.id} 
-                        className={`flex ${isStaff ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                            isStaff
-                              ? "bg-[#7A9B8E] text-white rounded-br-md"
-                              : "bg-[#B8A9D4]/20 text-foreground rounded-bl-md"
-                          }`}
-                        >
-                          <p className="text-sm whitespace-pre-wrap line-clamp-3">
-                            {message.body || message.content}
-                          </p>
-                          <div className={`flex items-center gap-2 mt-1 text-xs ${
-                            isStaff ? "text-white/70 justify-end" : "text-muted-foreground"
-                          }`}>
-                            <span>{message.sender_type === "staff" ? "Staff" : "Family"}</span>
-                            <span>•</span>
-                            <span>{new Date(message.created_at).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {messages.length >= 5 && (
-                    <div className="text-center pt-4">
-                      <Link href={`/admin/messages?patient=${params.id}`}>
-                        <Button variant="link" className="text-[#7A9B8E]">
-                          View all messages →
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+
       </Tabs>
     </div>
   );
