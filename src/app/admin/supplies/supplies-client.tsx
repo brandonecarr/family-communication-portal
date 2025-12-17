@@ -45,6 +45,7 @@ type SupplyRequest = {
   requested_by_name?: string | null;
   patient?: { first_name: string; last_name: string } | null;
   requester?: { name: string } | null;
+  deliveries?: { id: string }[] | null;
 };
 
 type Patient = {
