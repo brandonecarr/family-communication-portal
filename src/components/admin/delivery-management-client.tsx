@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { detectCarrierFromTrackingNumber } from "@/lib/tracking-utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,35 +92,6 @@ const carrierOptions = [
   "LaserShip",
   "Other",
 ];
-
-// Detect carrier from tracking number format
-function detectCarrierFromTrackingNumber(trackingNumber: string): string | null {
-  if (!trackingNumber) return null;
-  
-  const num = trackingNumber.toUpperCase().trim();
-  
-  // UPS: starts with 1Z followed by alphanumeric
-  if (/^1Z[A-Z0-9]{16,18}$/i.test(num)) return "UPS";
-  
-  // FedEx: 12-22 digits, or starts with specific patterns
-  if (/^\d{12}$/.test(num) || /^\d{15}$/.test(num) || /^\d{20}$/.test(num) || /^\d{22}$/.test(num)) return "FedEx";
-  if (/^[0-9]{12,22}$/.test(num)) return "FedEx";
-  
-  // USPS: 20-22 digits, or starts with 9 followed by 15-21 digits
-  if (/^9[0-9]{15,21}$/.test(num)) return "USPS";
-  if (/^[0-9]{20,22}$/.test(num)) return "USPS";
-  if (/^(94|93|92|91)[0-9]{18,20}$/.test(num)) return "USPS";
-  
-  // DHL: 10-11 digits or starts with JD/JJD
-  if (/^[0-9]{10,11}$/.test(num)) return "DHL";
-  if (/^JD[0-9]{18}$/i.test(num)) return "DHL";
-  if (/^JJD[0-9]{17}$/i.test(num)) return "DHL";
-  
-  // Amazon: TBA followed by digits
-  if (/^TBA[0-9]{12,}$/i.test(num)) return "Amazon Logistics";
-  
-  return null;
-}
 
 // Default supply items (fallback if no custom catalog exists)
 const defaultSupplyItems = [
@@ -618,8 +590,21 @@ export function DeliveryManagementClient({
                       </div>
 
                       {(delivery.last_update || delivery.notes) && (
-                        <p className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-3">
-                          {delivery.last_update || delivery.notes}
+                        <p className="text-sm text-[#2D2D2D]/70 bg-[#FAF8F5] border border-[#7A9B8E]/20 rounded-xl p-4 leading-relaxed italic">
+                          {delivery.last_update ? (
+                            <>
+                              <span className="font-medium text-[#7A9B8E]">Last Update:</span>{" "}
+                              {new Date(delivery.last_update).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </>
+                          ) : (
+                            delivery.notes
+                          )}
                         </p>
                       )}
 
