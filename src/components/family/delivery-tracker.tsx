@@ -124,7 +124,7 @@ export default function DeliveryTracker() {
   return (
     <div className="grid gap-6">
       {deliveries.map((delivery) => {
-        const config = statusConfig[delivery.status as keyof typeof statusConfig] || statusConfig.scheduled;
+        const config = statusConfig[delivery.status as keyof typeof statusConfig] || statusConfig.ordered;
         const trackingUrl = getTrackingUrl(delivery);
 
         return (
