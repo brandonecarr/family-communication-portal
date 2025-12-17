@@ -30,6 +30,12 @@ async function getUserAgencyAndRole(supabase: any): Promise<{ agencyId: string |
   };
 }
 
+// Legacy helper for backward compatibility
+async function getUserAgencyId(supabase: any): Promise<string | null> {
+  const { agencyId } = await getUserAgencyAndRole(supabase);
+  return agencyId;
+}
+
 export async function getEducationModules() {
   const supabase = await createClient();
   
