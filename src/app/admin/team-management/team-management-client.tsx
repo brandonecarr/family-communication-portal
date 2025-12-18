@@ -59,6 +59,14 @@ interface RolePermission {
   staff: boolean;
 }
 
+interface TeamManagementClientProps {
+  teamMembers: TeamMember[];
+  pendingInvitations: TeamInvitation[];
+  currentUserId: string;
+  currentUserRole: string;
+  initialRolePermissions?: RolePermission[];
+}
+
 const roleColors: Record<string, string> = {
   agency_admin: "bg-red-100 text-red-800",
   agency_staff: "bg-[#7A9B8E]/20 text-[#7A9B8E]",
