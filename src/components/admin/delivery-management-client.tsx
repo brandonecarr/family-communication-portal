@@ -493,19 +493,6 @@ export function DeliveryManagementClient({
         </div>
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            className="rounded-full gap-2"
-            onClick={syncAllTracking}
-            disabled={isSyncingTracking}
-          >
-            {isSyncingTracking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Sync Tracking
-          </Button>
-          <Button
             className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full gap-2"
             onClick={() => setShowAddDialog(true)}
           >
