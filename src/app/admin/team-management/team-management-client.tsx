@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Users,
   Plus,
@@ -47,15 +48,15 @@ import {
   updateTeamMemberRole,
   updateTeamMemberJobRole,
   removeTeamMember,
+  saveRolePermissions,
   type TeamMember,
   type TeamInvitation,
 } from "@/lib/actions/team-management";
 
-interface TeamManagementClientProps {
-  teamMembers: TeamMember[];
-  pendingInvitations: TeamInvitation[];
-  currentUserId: string;
-  currentUserRole: string;
+interface RolePermission {
+  name: string;
+  admin: boolean;
+  staff: boolean;
 }
 
 const roleColors: Record<string, string> = {
@@ -86,7 +87,7 @@ const jobRoleOptions = [
   { value: "NP", label: "NP" },
 ];
 
-const permissions = [
+const DEFAULT_PERMISSIONS: RolePermission[] = [
   { name: "View Dashboard", admin: true, staff: true },
   { name: "Manage Patients", admin: true, staff: true },
   { name: "Manage Visits", admin: true, staff: true },
@@ -125,6 +126,7 @@ export default function TeamManagementClient({
   pendingInvitations: initialPendingInvitations,
   currentUserId,
   currentUserRole,
+  initialRolePermissions,
 }: TeamManagementClientProps) {
   const { toast } = useToast();
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
@@ -145,12 +147,63 @@ export default function TeamManagementClient({
   const [newJobRole, setNewJobRole] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
+  // Permissions state - use server-provided permissions or defaults
+  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>(
+    initialRolePermissions || DEFAULT_PERMISSIONS
+  );
+  const [savedPermissions, setSavedPermissions] = useState<RolePermission[]>(
+    initialRolePermissions || DEFAULT_PERMISSIONS
+  );
+  const [permissionsChanged, setPermissionsChanged] = useState(false);
+
   const isAdmin = currentUserRole === "agency_admin" || currentUserRole === "super_admin";
 
   // Prevent hydration mismatch by only rendering dates after mount
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Check if permissions have changed from saved state
+  useEffect(() => {
+    const hasChanges = JSON.stringify(rolePermissions) !== JSON.stringify(savedPermissions);
+    setPermissionsChanged(hasChanges);
+  }, [rolePermissions, savedPermissions]);
+
+  const handlePermissionToggle = (permissionName: string, role: 'admin' | 'staff') => {
+    setRolePermissions(prev => 
+      prev.map(perm => 
+        perm.name === permissionName 
+          ? { ...perm, [role]: !perm[role] }
+          : perm
+      )
+    );
+  };
+
+  const handleSavePermissions = async () => {
+    setLoading(true);
+    try {
+      await saveRolePermissions(rolePermissions);
+      setSavedPermissions([...rolePermissions]);
+      toast({
+        title: "Success",
+        description: "Role permissions updated successfully",
+      });
+      setPermissionsChanged(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update permissions",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPermissions = () => {
+    // Reset to the last saved state, not the defaults
+    setRolePermissions([...savedPermissions]);
+  };
 
   const handleInvite = async () => {
     if (!inviteEmail) {
@@ -190,14 +243,16 @@ export default function TeamManagementClient({
 
     setLoading(true);
     try {
-      await inviteTeamMember({
+      const result = await inviteTeamMember({
         email: inviteEmail,
         role: inviteRole,
       });
       
       toast({
         title: "Success",
-        description: "Invitation sent successfully",
+        description: result.emailSent 
+          ? "Invitation email sent successfully" 
+          : "Invitation created. Email delivery may be delayed.",
       });
       
       setInviteDialogOpen(false);
@@ -220,10 +275,12 @@ export default function TeamManagementClient({
   const handleResendInvitation = async (invitationId: string) => {
     setLoading(true);
     try {
-      await resendInvitation(invitationId);
+      const result = await resendInvitation(invitationId);
       toast({
         title: "Success",
-        description: "Invitation resent successfully",
+        description: result.emailSent 
+          ? "Invitation email resent successfully" 
+          : "Invitation updated. Email delivery may be delayed.",
       });
     } catch (error: any) {
       toast({
@@ -568,45 +625,68 @@ export default function TeamManagementClient({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-3 font-medium">
-                    Permission
-                  </th>
-                  <th className="text-center py-2 px-3 font-medium">
-                    Administrator
-                  </th>
-                  <th className="text-center py-2 px-3 font-medium">Staff</th>
-                </tr>
-              </thead>
-              <tbody>
-                {permissions.map((permission) => (
-                  <tr key={permission.name} className="border-b">
-                    <td className="py-2 px-3">{permission.name}</td>
-                    <td className="text-center py-2 px-3">
-                      {permission.admin ? (
-                        <Badge className="bg-[#7A9B8E]/20 text-[#7A9B8E]">
-                          <Check className="h-3 w-3" />
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="text-center py-2 px-3">
-                      {permission.staff ? (
-                        <Badge className="bg-[#7A9B8E]/20 text-[#7A9B8E]">
-                          <Check className="h-3 w-3" />
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
+          <div className="space-y-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-3 font-medium">
+                      Permission
+                    </th>
+                    <th className="text-center py-3 px-3 font-medium">
+                      Administrator
+                    </th>
+                    <th className="text-center py-3 px-3 font-medium">Staff</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rolePermissions.map((permission) => (
+                    <tr key={permission.name} className="border-b hover:bg-[#FAF8F5]">
+                      <td className="py-3 px-3 font-medium text-[#2D2D2D]">
+                        {permission.name}
+                      </td>
+                      <td className="text-center py-3 px-3">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            checked={permission.admin}
+                            onCheckedChange={() => handlePermissionToggle(permission.name, 'admin')}
+                            className="h-5 w-5 rounded border-2 data-[state=checked]:bg-[#7A9B8E] data-[state=checked]:border-[#7A9B8E]"
+                          />
+                        </div>
+                      </td>
+                      <td className="text-center py-3 px-3">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            checked={permission.staff}
+                            onCheckedChange={() => handlePermissionToggle(permission.name, 'staff')}
+                            className="h-5 w-5 rounded border-2 data-[state=checked]:bg-[#7A9B8E] data-[state=checked]:border-[#7A9B8E]"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {permissionsChanged && (
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={handleSavePermissions}
+                  disabled={loading}
+                  className="bg-[#7A9B8E] hover:bg-[#6A8B7E] text-white rounded-full px-6"
+                >
+                  {loading ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button
+                  onClick={handleResetPermissions}
+                  variant="outline"
+                  className="rounded-full px-6"
+                >
+                  Reset
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

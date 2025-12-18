@@ -1028,6 +1028,44 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          admin_enabled: boolean
+          agency_id: string
+          created_at: string
+          id: string
+          permission_name: string
+          staff_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          admin_enabled?: boolean
+          agency_id: string
+          created_at?: string
+          id?: string
+          permission_name: string
+          staff_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          admin_enabled?: boolean
+          agency_id?: string
+          created_at?: string
+          id?: string
+          permission_name?: string
+          staff_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_catalog_items: {
         Row: {
           agency_id: string

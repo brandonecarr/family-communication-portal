@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient, createServiceClient } from "../../../../supabase/server";
 import TeamManagementClient from "./team-management-client";
-import { TeamMember, TeamInvitation } from "@/lib/actions/team-management";
+import { TeamMember, TeamInvitation, getRolePermissions } from "@/lib/actions/team-management";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = "force-dynamic";
@@ -133,6 +133,25 @@ export default async function AdminTeamManagementPage() {
     invited_by_name: inviterMap.get(inv.invited_by) || null,
   }));
 
+  // Fetch role permissions
+  let rolePermissions: Array<{ name: string; admin: boolean; staff: boolean }> = [];
+  try {
+    rolePermissions = await getRolePermissions();
+  } catch (error) {
+    console.error("Error fetching role permissions:", error);
+    // Use defaults if fetch fails
+    rolePermissions = [
+      { name: "View Dashboard", admin: true, staff: true },
+      { name: "Manage Patients", admin: true, staff: true },
+      { name: "Manage Visits", admin: true, staff: true },
+      { name: "Manage Messages", admin: true, staff: true },
+      { name: "View Reports", admin: true, staff: true },
+      { name: "Manage Team", admin: true, staff: false },
+      { name: "Manage Settings", admin: true, staff: false },
+      { name: "View Audit Logs", admin: true, staff: false },
+    ];
+  }
+
   return (
     <Suspense
       fallback={
@@ -146,6 +165,7 @@ export default async function AdminTeamManagementPage() {
         pendingInvitations={pendingInvitations}
         currentUserId={user.id}
         currentUserRole={currentUserAgency?.role || "agency_staff"}
+        initialRolePermissions={rolePermissions}
       />
     </Suspense>
   );

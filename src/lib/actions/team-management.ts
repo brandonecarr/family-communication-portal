@@ -125,30 +125,34 @@ export async function getTeamMembers(passedAgencyId?: string): Promise<TeamMembe
     return [];
   }
 
-  // Query users without last_sign_in_at (doesn't exist in public.users table)
+  // Query users - only include those who have completed onboarding
   const { data: users, error: usersError } = await serviceClient
     .from("users")
-    .select("id, full_name, name, email, avatar_url")
-    .in("id", userIds);
+    .select("id, full_name, name, email, avatar_url, onboarding_completed")
+    .in("id", userIds)
+    .eq("onboarding_completed", true);
 
   if (!users) return [];
 
   const usersMap = new Map(users.map((u: any) => [u.id, u]));
 
-  return (agencyUsers || []).map((au: any) => {
-    const userData: any = usersMap.get(au.user_id) || {};
-    return {
-      id: au.user_id,
-      name: userData.full_name || userData.name || userData.email?.split("@")[0] || "Unknown",
-      email: userData.email || "",
-      role: au.role,
-      jobRole: au.job_role || null,
-      status: "Active",
-      lastLogin: null, // last_sign_in_at is not available in public.users
-      joinDate: au.created_at,
-      avatar_url: userData.avatar_url,
-    };
-  });
+  // Only return team members who have completed onboarding
+  return (agencyUsers || [])
+    .filter((au: any) => usersMap.has(au.user_id))
+    .map((au: any) => {
+      const userData: any = usersMap.get(au.user_id) || {};
+      return {
+        id: au.user_id,
+        name: userData.full_name || userData.name || userData.email?.split("@")[0] || "Unknown",
+        email: userData.email || "",
+        role: au.role,
+        jobRole: au.job_role || null,
+        status: "Active",
+        lastLogin: null, // last_sign_in_at is not available in public.users
+        joinDate: au.created_at,
+        avatar_url: userData.avatar_url,
+      };
+    });
 }
 
 // Get pending invitations for the current user's agency
@@ -196,17 +200,9 @@ export async function getPendingInvitations(passedAgencyId?: string): Promise<Te
     return [];
   }
 
-  // Also fetch users who have been invited but haven't completed onboarding
-  const { data: pendingUsers } = await serviceClient
-    .from("users")
-    .select("id, email, full_name, role, created_at")
-    .eq("agency_id", agencyId)
-    .eq("onboarding_completed", false);
-
-  console.log(`[DEBUG] Found ${pendingUsers?.length || 0} pending users (not completed onboarding) for agency ${agencyId}`);
-
-  // Combine both sources of pending invitations
-  const teamInvitations = (invitations || []).map((inv: any) => ({
+  // Return only actual pending invitations from team_invitations table
+  // Users will only appear in Team Members after they accept and complete onboarding
+  return (invitations || []).map((inv: any) => ({
     id: inv.id,
     email: inv.email,
     role: inv.role,
@@ -216,20 +212,6 @@ export async function getPendingInvitations(passedAgencyId?: string): Promise<Te
     created_at: inv.created_at,
     invited_by_name: inv.invited_by_name,
   }));
-
-  // Add pending users as invitations
-  const pendingUserInvitations = (pendingUsers || []).map((user: any) => ({
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    status: "pending",
-    token: "",
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-    created_at: user.created_at,
-    invited_by_name: "System",
-  }));
-
-  return [...teamInvitations, ...pendingUserInvitations];
 }
 
 // Invite a new team member
@@ -344,36 +326,10 @@ export async function inviteTeamMember(data: {
     throw new Error("Failed to generate invitation token");
   }
 
-  // Create user record if it was created
-  if (linkData.user) {
-    const { error: userError } = await serviceClient
-      .from("users")
-      .insert({
-        id: linkData.user.id,
-        email: data.email,
-        full_name: data.name || "",
-        role: data.role,
-        agency_id: agencyId,
-        onboarding_completed: false,
-      });
-
-    if (userError) {
-      console.error("Error creating user record:", userError);
-    }
-
-    // Create agency_users relationship
-    const { error: agencyUserError } = await serviceClient
-      .from("agency_users")
-      .insert({
-        user_id: linkData.user.id,
-        agency_id: agencyId,
-        role: data.role,
-      });
-
-    if (agencyUserError) {
-      console.error("Error creating agency_users record:", agencyUserError);
-    }
-  }
+  // NOTE: We do NOT create user or agency_users records here.
+  // These will be created when the user accepts the invitation and completes onboarding.
+  // This ensures users only appear in the Team Members section after they've accepted.
+  console.log(`[INVITE] User record will be created when invitation is accepted`);
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
@@ -493,35 +449,9 @@ export async function resendInvitation(invitationId: string) {
     throw new Error("Failed to generate invitation token");
   }
 
-  // Create user record if it was created
-  if (linkData.user) {
-    const { error: userError } = await serviceClient
-      .from("users")
-      .insert({
-        id: linkData.user.id,
-        email: invitation.email,
-        role: invitation.role,
-        agency_id: invitation.agency_id,
-        onboarding_completed: false,
-      });
-
-    if (userError) {
-      console.error("Error creating user record:", userError);
-    }
-
-    // Create agency_users relationship
-    const { error: agencyUserError } = await serviceClient
-      .from("agency_users")
-      .insert({
-        user_id: linkData.user.id,
-        agency_id: invitation.agency_id,
-        role: invitation.role,
-      });
-
-    if (agencyUserError) {
-      console.error("Error creating agency_users record:", agencyUserError);
-    }
-  }
+  // NOTE: We do NOT create user or agency_users records here.
+  // These will be created when the user accepts the invitation and completes onboarding.
+  console.log(`[RESEND] User record will be created when invitation is accepted`);
 
   // Update the invitation with the new token and expiration
   const expiresAt = new Date();
@@ -645,6 +575,14 @@ export async function cancelInvitation(invitationId: string) {
     throw new Error("Service client not available");
   }
 
+  // Get the invitation to find the email
+  const { data: invitation } = await serviceClient
+    .from("team_invitations")
+    .select("email")
+    .eq("id", invitationId)
+    .single();
+
+  // Update invitation status
   const { error } = await serviceClient
     .from("team_invitations")
     .update({ status: "cancelled" })
@@ -652,6 +590,33 @@ export async function cancelInvitation(invitationId: string) {
 
   if (error) {
     throw new Error("Failed to cancel invitation");
+  }
+
+  // Clean up any orphaned auth user that was created by generateLink
+  if (invitation?.email) {
+    const { data: existingUsers } = await serviceClient.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(u => u.email === invitation.email);
+    
+    if (existingUser) {
+      // Check if user has completed onboarding
+      const { data: userData } = await serviceClient
+        .from("users")
+        .select("onboarding_completed")
+        .eq("id", existingUser.id)
+        .single();
+      
+      // Only delete if user hasn't completed onboarding (i.e., never accepted the invite)
+      if (!userData?.onboarding_completed) {
+        console.log(`[CANCEL] Cleaning up orphaned auth user for ${invitation.email}`);
+        await serviceClient.auth.admin.deleteUser(existingUser.id);
+        
+        // Also delete from users table if exists
+        await serviceClient
+          .from("users")
+          .delete()
+          .eq("id", existingUser.id);
+      }
+    }
   }
 
   revalidatePath("/admin/team-management");
@@ -794,6 +759,125 @@ export async function removeTeamMember(userId: string) {
 
   if (error) {
     throw new Error("Failed to remove team member");
+  }
+
+  revalidatePath("/admin/team-management");
+  return { success: true };
+}
+
+// Default permissions configuration
+const DEFAULT_PERMISSIONS = [
+  { name: "View Dashboard", admin: true, staff: true },
+  { name: "Manage Patients", admin: true, staff: true },
+  { name: "Manage Visits", admin: true, staff: true },
+  { name: "Manage Messages", admin: true, staff: true },
+  { name: "View Reports", admin: true, staff: true },
+  { name: "Manage Team", admin: true, staff: false },
+  { name: "Manage Settings", admin: true, staff: false },
+  { name: "View Audit Logs", admin: true, staff: false },
+];
+
+// Get role permissions for an agency
+export async function getRolePermissions() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Get user's agency
+  const { data: agencyUser } = await supabase
+    .from("agency_users")
+    .select("agency_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!agencyUser) throw new Error("No agency found");
+
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Fetch existing permissions
+  const { data: permissions, error } = await serviceClient
+    .from("role_permissions")
+    .select("*")
+    .eq("agency_id", agencyUser.agency_id);
+
+  if (error) {
+    console.error("Error fetching role permissions:", error);
+    throw new Error("Failed to fetch role permissions");
+  }
+
+  // If no permissions exist, return defaults
+  if (!permissions || permissions.length === 0) {
+    return DEFAULT_PERMISSIONS;
+  }
+
+  // Map database permissions to the expected format
+  return DEFAULT_PERMISSIONS.map((defaultPerm) => {
+    const dbPerm = permissions.find((p: any) => p.permission_name === defaultPerm.name);
+    if (dbPerm) {
+      return {
+        name: dbPerm.permission_name,
+        admin: dbPerm.admin_enabled,
+        staff: dbPerm.staff_enabled,
+      };
+    }
+    return defaultPerm;
+  });
+}
+
+// Save role permissions for an agency
+export async function saveRolePermissions(
+  permissions: Array<{ name: string; admin: boolean; staff: boolean }>
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Get user's agency and verify admin role
+  const { data: agencyUser } = await supabase
+    .from("agency_users")
+    .select("agency_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!agencyUser) throw new Error("No agency found");
+  if (agencyUser.role !== "agency_admin" && agencyUser.role !== "super_admin") {
+    throw new Error("Only administrators can modify role permissions");
+  }
+
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    throw new Error("Service client not available");
+  }
+
+  // Upsert each permission
+  for (const perm of permissions) {
+    const { error } = await serviceClient
+      .from("role_permissions")
+      .upsert(
+        {
+          agency_id: agencyUser.agency_id,
+          permission_name: perm.name,
+          admin_enabled: perm.admin,
+          staff_enabled: perm.staff,
+        },
+        {
+          onConflict: "agency_id,permission_name",
+        }
+      );
+
+    if (error) {
+      console.error("Error saving permission:", perm.name, error);
+      throw new Error(`Failed to save permission: ${perm.name}`);
+    }
   }
 
   revalidatePath("/admin/team-management");
