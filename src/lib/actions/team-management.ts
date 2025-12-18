@@ -507,57 +507,102 @@ async function sendInvitationEmailWithUrl(params: {
   role: string;
   inviteUrl: string;
 }) {
-  const roleLabel = params.role === 'agency_admin' ? 'Administrator' : 'Staff Member';
-  
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase URL or anon key');
-    return { success: false, error: 'Missing configuration' };
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    console.error('Service client not available');
+    return { success: false, error: 'Service client not available' };
   }
 
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/supabase-functions-send-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
-      body: JSON.stringify({
+    const { error: emailError } = await serviceClient.functions.invoke('supabase-functions-send-email', {
+      body: {
         to: params.email,
-        subject: `${params.inviterName} invited you to join ${params.agencyName}`,
-        htmlContent: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #2D2D2D;">You're Invited!</h1>
-            <p style="color: #2D2D2D; font-size: 16px;">
-              <strong>${params.inviterName}</strong> has invited you to join <strong>${params.agencyName}</strong> as a <strong>${roleLabel}</strong>.
-            </p>
-            <p style="color: #2D2D2D; font-size: 16px;">Click the button below to accept your invitation:</p>
-            <p style="margin: 24px 0;">
-              <a href="${params.inviteUrl}" style="background-color: #7A9B8E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Accept Invitation</a>
-            </p>
-            <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-            <p style="color: #7A9B8E; font-size: 14px; word-break: break-all;">${params.inviteUrl}</p>
-            <p style="color: #999; font-size: 12px; margin-top: 32px;"><strong>Important:</strong> This link is valid for 24 hours. If it expires, you can request a new invitation.</p>
-          </div>
-        `,
-      }),
+        subject: `You're invited to join ${params.agencyName}`,
+        htmlContent: generateTeamInviteEmail({
+          staffName: params.inviterName !== 'A team member' ? '' : '',
+          agencyName: params.agencyName,
+          role: params.role,
+          inviteUrl: params.inviteUrl,
+          inviterName: params.inviterName,
+        }),
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error sending invitation email:', errorText);
-      return { success: false, error: errorText };
+    if (emailError) {
+      console.error('Error sending invitation email:', emailError);
+      return { success: false, error: emailError.message };
     }
 
-    const data = await response.json();
     console.log(`[EMAIL] Successfully sent invitation email to ${params.email}`);
-    return { success: true, data };
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     console.error('Error sending invitation email:', error);
-    return { success: false, error };
+    return { success: false, error: error.message };
   }
+}
+
+// Generate a nicely formatted team invitation email (same as facility onboarding)
+function generateTeamInviteEmail({ staffName, agencyName, role, inviteUrl, inviterName }: { 
+  staffName?: string; 
+  agencyName: string; 
+  role: string; 
+  inviteUrl: string;
+  inviterName?: string;
+}) {
+  const roleLabel = role === 'agency_admin' ? 'Administrator' : 'Staff Member';
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You're Invited!</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #FAF8F5; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #FAF8F5;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);">
+          <tr>
+            <td style="padding: 48px 40px;">
+              <h1 style="color: #2D2D2D; font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 600; margin: 0 0 24px; text-align: center;">
+                You're Invited!
+              </h1>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                Hello${staffName ? ` ${staffName}` : ''},
+              </p>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                ${inviterName && inviterName !== 'A team member' ? `<strong>${inviterName}</strong> has invited you` : "You've been invited"} to join <strong>${agencyName}</strong> as a <strong>${roleLabel}</strong> on our Family Communication Portal.
+              </p>
+              <p style="color: #2D2D2D; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
+                Click the button below to accept your invitation and set up your account:
+              </p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center; padding: 16px 0;">
+                    <a href="${inviteUrl}" style="display: inline-block; background-color: #7A9B8E; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px;">
+                      Accept Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #6B6B6B; font-size: 14px; line-height: 1.6; margin: 32px 0 0; text-align: center;">
+                This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+              </p>
+              <p style="color: #6B6B6B; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center; word-break: break-all;">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                <a href="${inviteUrl}" style="color: #7A9B8E;">${inviteUrl}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
 }
 
 // Cancel invitation
