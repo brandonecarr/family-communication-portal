@@ -48,11 +48,11 @@ export default async function AdminSuppliesPage() {
   // Get user's name for approval/rejection
   const { data: userData } = await supabase
     .from("users")
-    .select("name")
+    .select("full_name")
     .eq("id", user.id)
     .single();
   
-  const userName = userData?.name || user.email || "Admin";
+  const userName = userData?.full_name || "Admin";
 
   // Fetch supply requests for patients in this agency
   let requests: SupplyRequest[] = [];

@@ -1043,23 +1043,7 @@ export function DeliveryManagementClient({
                   </p>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="new-status">New Status</Label>
-                <Select
-                  value={newStatus}
-                  onValueChange={setNewStatus}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="shipped">Shipped (Label Created)</SelectItem>
-                    <SelectItem value="in_transit">In Transit (On the Way)</SelectItem>
-                    <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="tracking-link">Tracking Link (optional)</Label>
                 <Input
@@ -1075,7 +1059,7 @@ export function DeliveryManagementClient({
               </div>
               <Button
                 onClick={handleUpdateStatus}
-                disabled={!newStatus || isLoading}
+                disabled={isLoading}
                 className="w-full"
               >
                 {isLoading ? (
